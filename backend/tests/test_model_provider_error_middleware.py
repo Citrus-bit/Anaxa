@@ -160,9 +160,10 @@ def test_retry_after_header_controls_retry_delay(monkeypatch):
     assert sleeps == [7.0]
 
 
-def test_retry_after_header_is_capped(monkeypatch):
+def test_retry_after_header_over_normal_backoff_cap_is_respected_with_heartbeats(monkeypatch):
     middleware = ModelProviderErrorMiddleware()
     sleeps: list[float] = []
+    events: list[dict] = []
     body = {
         "error": {
             "message": "temporarily unavailable",
@@ -182,9 +183,103 @@ def test_retry_after_header_is_capped(monkeypatch):
         return success
 
     monkeypatch.setattr("medrix_flow.agents.middlewares.model_provider_error_middleware.time.sleep", sleeps.append)
+    monkeypatch.setattr("medrix_flow.agents.middlewares.model_provider_error_middleware.get_stream_writer", lambda: events.append)
 
     assert middleware.wrap_model_call(object(), _handler) is success
-    assert sleeps == [30.0]
+    retry_events = [event for event in events if event["type"] == "model_retry"]
+    heartbeat_events = [event for event in events if event["type"] == "model_retry_heartbeat"]
+    assert retry_events[0]["delay_seconds"] == 120.0
+    assert sleeps == [15.0] * 8
+    assert [event["remaining_seconds"] for event in heartbeat_events] == [105.0, 90.0, 75.0, 60.0, 45.0, 30.0, 15.0]
+
+
+def test_retry_after_header_is_capped_at_retry_after_limit(monkeypatch):
+    middleware = ModelProviderErrorMiddleware()
+    sleeps: list[float] = []
+    events: list[dict] = []
+    body = {
+        "error": {
+            "message": "temporarily unavailable",
+            "code": "temporarily_unavailable",
+        }
+    }
+    response = _provider_response_with_headers(503, body, {"Retry-After": "900"})
+    error = InternalServerError("Error code: 503", response=response, body=body)
+    success = ModelResponse(result=[AIMessage(content="done")])
+    calls = 0
+
+    def _handler(_request):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise error
+        return success
+
+    monkeypatch.setattr("medrix_flow.agents.middlewares.model_provider_error_middleware.time.sleep", sleeps.append)
+    monkeypatch.setattr("medrix_flow.agents.middlewares.model_provider_error_middleware.get_stream_writer", lambda: events.append)
+
+    assert middleware.wrap_model_call(object(), _handler) is success
+    retry_events = [event for event in events if event["type"] == "model_retry"]
+    heartbeat_events = [event for event in events if event["type"] == "model_retry_heartbeat"]
+    assert retry_events[0]["delay_seconds"] == 600.0
+    assert len(sleeps) == 40
+    assert sum(sleeps) == 600.0
+    assert heartbeat_events[-1]["remaining_seconds"] == 15.0
+
+
+def test_backoff_delay_is_capped_at_normal_retry_limit(monkeypatch):
+    middleware = ModelProviderErrorMiddleware()
+    events: list[dict] = []
+    calls = 0
+    success = ModelResponse(result=[AIMessage(content="done")])
+
+    def _handler(_request):
+        nonlocal calls
+        calls += 1
+        if calls <= 9:
+            raise _overload_error()
+        return success
+
+    monkeypatch.setattr("medrix_flow.agents.middlewares.model_provider_error_middleware.time.sleep", lambda _delay: None)
+    monkeypatch.setattr("medrix_flow.agents.middlewares.model_provider_error_middleware.get_stream_writer", lambda: events.append)
+
+    assert middleware.wrap_model_call(object(), _handler) is success
+    retry_events = [event for event in events if event["type"] == "model_retry"]
+    assert [event["delay_seconds"] for event in retry_events] == [2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0, 256.0, 300.0]
+
+
+def test_async_retry_waits_in_chunks_and_emits_heartbeats(monkeypatch):
+    middleware = ModelProviderErrorMiddleware()
+    sleeps: list[float] = []
+    events: list[dict] = []
+    body = {
+        "error": {
+            "message": "temporarily unavailable",
+            "code": "temporarily_unavailable",
+        }
+    }
+    response = _provider_response_with_headers(503, body, {"Retry-After": "34"})
+    error = InternalServerError("Error code: 503", response=response, body=body)
+    success = ModelResponse(result=[AIMessage(content="done")])
+    calls = 0
+
+    async def _handler(_request):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise error
+        return success
+
+    async def _sleep(delay: float) -> None:
+        sleeps.append(delay)
+
+    monkeypatch.setattr("medrix_flow.agents.middlewares.model_provider_error_middleware.asyncio.sleep", _sleep)
+    monkeypatch.setattr("medrix_flow.agents.middlewares.model_provider_error_middleware.get_stream_writer", lambda: events.append)
+
+    assert asyncio.run(middleware.awrap_model_call(object(), _handler)) is success
+    heartbeat_events = [event for event in events if event["type"] == "model_retry_heartbeat"]
+    assert sleeps == [15.0, 15.0, 4.0]
+    assert [event["remaining_seconds"] for event in heartbeat_events] == [19.0, 4.0]
 
 
 def test_retry_event_writer_failure_does_not_stop_retry(monkeypatch):

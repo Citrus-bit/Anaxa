@@ -30,7 +30,9 @@ logger = logging.getLogger(__name__)
 
 _TRANSIENT_STATUS_CODES = {408, 409, 429, 500, 502, 503, 504, 529}
 _BASE_RETRY_DELAY_SECONDS = 2.0
-_MAX_RETRY_DELAY_SECONDS = 30.0
+_MAX_RETRY_DELAY_SECONDS = 300.0
+_MAX_RETRY_AFTER_DELAY_SECONDS = 600.0
+_RETRY_SLEEP_CHUNK_SECONDS = 15.0
 _TRANSIENT_PATTERNS = (
     "system_cpu_overloaded",
     "system cpu overloaded",
@@ -101,7 +103,7 @@ def _retry_after_seconds(exc: BaseException) -> float | None:
 def _retry_delay_seconds(attempt: int, exc: BaseException) -> float:
     retry_after = _retry_after_seconds(exc)
     if retry_after is not None:
-        return min(retry_after, _MAX_RETRY_DELAY_SECONDS)
+        return min(retry_after, _MAX_RETRY_AFTER_DELAY_SECONDS)
 
     backoff = _BASE_RETRY_DELAY_SECONDS * (2 ** max(0, attempt - 1))
     return min(backoff, _MAX_RETRY_DELAY_SECONDS)
@@ -181,28 +183,63 @@ class ModelProviderErrorMiddleware(AgentMiddleware[AgentState]):
             delay_seconds,
         )
 
-    def _emit_retry_event(self, *, attempt: int, exc: BaseException, delay_seconds: float) -> None:
+    def _emit_stream_event(self, event: dict[str, Any], *, failure_message: str) -> None:
         try:
             writer = get_stream_writer()
         except Exception:
             logger.debug("Model retry stream writer is unavailable", exc_info=True)
             return
 
-        status = _status_code(exc)
         try:
-            writer(
-                {
-                    "type": "model_retry",
-                    "attempt": attempt,
-                    "delay_seconds": delay_seconds,
-                    "error_class": exc.__class__.__name__,
-                    "status_code": status,
-                    "provider_code": _provider_error_code(exc),
-                    "retry_at": _retry_at_iso(delay_seconds),
-                }
-            )
+            writer(event)
         except Exception:
-            logger.debug("Failed to emit model retry stream event", exc_info=True)
+            logger.debug(failure_message, exc_info=True)
+
+    def _emit_retry_event(self, *, attempt: int, exc: BaseException, delay_seconds: float) -> None:
+        status = _status_code(exc)
+        self._emit_stream_event(
+            {
+                "type": "model_retry",
+                "attempt": attempt,
+                "delay_seconds": delay_seconds,
+                "error_class": exc.__class__.__name__,
+                "status_code": status,
+                "provider_code": _provider_error_code(exc),
+                "retry_at": _retry_at_iso(delay_seconds),
+            },
+            failure_message="Failed to emit model retry stream event",
+        )
+
+    def _emit_retry_heartbeat_event(self, *, attempt: int, exc: BaseException, remaining_seconds: float) -> None:
+        self._emit_stream_event(
+            {
+                "type": "model_retry_heartbeat",
+                "attempt": attempt,
+                "remaining_seconds": remaining_seconds,
+                "error_class": exc.__class__.__name__,
+                "status_code": _status_code(exc),
+                "provider_code": _provider_error_code(exc),
+            },
+            failure_message="Failed to emit model retry heartbeat stream event",
+        )
+
+    def _sleep_with_heartbeats(self, *, attempt: int, exc: BaseException, delay_seconds: float) -> None:
+        remaining = delay_seconds
+        while remaining > 0:
+            chunk = min(remaining, _RETRY_SLEEP_CHUNK_SECONDS)
+            time.sleep(chunk)
+            remaining = max(0.0, remaining - chunk)
+            if remaining > 0:
+                self._emit_retry_heartbeat_event(attempt=attempt, exc=exc, remaining_seconds=remaining)
+
+    async def _asleep_with_heartbeats(self, *, attempt: int, exc: BaseException, delay_seconds: float) -> None:
+        remaining = delay_seconds
+        while remaining > 0:
+            chunk = min(remaining, _RETRY_SLEEP_CHUNK_SECONDS)
+            await asyncio.sleep(chunk)
+            remaining = max(0.0, remaining - chunk)
+            if remaining > 0:
+                self._emit_retry_heartbeat_event(attempt=attempt, exc=exc, remaining_seconds=remaining)
 
     @override
     def wrap_model_call(
@@ -222,7 +259,7 @@ class ModelProviderErrorMiddleware(AgentMiddleware[AgentState]):
                 delay_seconds = _retry_delay_seconds(attempt, exc)
                 self._log_retry(attempt=attempt, exc=exc, delay_seconds=delay_seconds)
                 self._emit_retry_event(attempt=attempt, exc=exc, delay_seconds=delay_seconds)
-                time.sleep(delay_seconds)
+                self._sleep_with_heartbeats(attempt=attempt, exc=exc, delay_seconds=delay_seconds)
                 attempt += 1
 
     @override
@@ -243,5 +280,5 @@ class ModelProviderErrorMiddleware(AgentMiddleware[AgentState]):
                 delay_seconds = _retry_delay_seconds(attempt, exc)
                 self._log_retry(attempt=attempt, exc=exc, delay_seconds=delay_seconds)
                 self._emit_retry_event(attempt=attempt, exc=exc, delay_seconds=delay_seconds)
-                await asyncio.sleep(delay_seconds)
+                await self._asleep_with_heartbeats(attempt=attempt, exc=exc, delay_seconds=delay_seconds)
                 attempt += 1
