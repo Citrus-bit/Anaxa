@@ -16,8 +16,11 @@ _REMOTE_GRAPHICS_RE = re.compile(r"(\\includegraphics(?:\[[^\]]*\])?\{)(https?:/
 _CJK_CHAR_RE = re.compile(r"[\u3400-\u9fff]")
 _DOCUMENTCLASS_RE = re.compile(r"\\documentclass(?:\[(?P<options>[^\]]*)\])?\{(?P<class>[^{}]+)\}")
 _CTEX_PACKAGE_RE = re.compile(r"\\usepackage(?:\[(?P<options>[^\]]*)\])?\{ctex\}")
+_HYPERREF_PACKAGE_RE = re.compile(r"\\usepackage(?:\[[^\]]*\])?\{hyperref\}")
+_BEGIN_DOCUMENT_RE = re.compile(r"\\begin\s*\{\s*document\s*\}")
 _CTEX_CLASSES = {"ctexart", "ctexrep", "ctexbook", "ctexbeamer"}
 _TOUNICODE_SPECIAL = r"\AtBeginDvi{\special{pdf:tounicode UTF8-UCS2}}"
+_HIDDEN_HYPERREF_SETUP = r"\hypersetup{hidelinks,pdfborder={0 0 0}}"
 _SUBSCRIPT_CHARS = {
     "₀": "0",
     "₁": "1",
@@ -176,9 +179,18 @@ def _sanitize_latex_source(source: str) -> str:
         source = source.replace("\\usepackage{graphicx}", "\\usepackage{graphicx}\n\\usepackage{subfig}", 1)
     if "\\usepackage{amsmath}" not in source and ("$" in source or "\\[" in source or "\\begin{equation" in source):
         source = source.replace("\\usepackage{graphicx}", "\\usepackage{graphicx}\n\\usepackage{amsmath}", 1)
-    if "\\hypersetup{" not in source and "\\usepackage{hyperref}" in source:
-        source = source.replace("\\usepackage{hyperref}", "\\usepackage{hyperref}\n\\hypersetup{hidelinks}", 1)
+    source = _ensure_hidden_hyperref_borders(source)
     return source
+
+
+def _ensure_hidden_hyperref_borders(source: str) -> str:
+    if not _HYPERREF_PACKAGE_RE.search(source) or _HIDDEN_HYPERREF_SETUP in source:
+        return source
+
+    begin_document_match = _BEGIN_DOCUMENT_RE.search(source)
+    insert_at = begin_document_match.start() if begin_document_match is not None else len(source)
+    prefix = "" if insert_at == 0 or source[insert_at - 1] == "\n" else "\n"
+    return source[:insert_at] + f"{prefix}{_HIDDEN_HYPERREF_SETUP}\n" + source[insert_at:]
 
 
 def _ensure_cjk_pdf_text_support(source: str) -> str:

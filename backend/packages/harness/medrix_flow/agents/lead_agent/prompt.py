@@ -425,6 +425,8 @@ When the user prompt is about 科研、论文、文献、引用、参考文献�
 - Before writing final manuscript citations, read or generate `references.bib`; use only exact
   BibTeX keys in inline LaTeX citations. Do not use `\\nocite{{*}}` unless the user explicitly asks
   to include every reference.
+- When using `hyperref` in manuscript LaTeX, keep citation and cross-reference links clickable but
+  visually hidden with `\\hypersetup{{hidelinks,pdfborder={{0 0 0}}}}`.
 - If `manuscript_export` or any fallback file/PDF tool fails, report the tool name and exact
   failure reason; do not say that tools are unavailable when the tool list contains the needed capability.
 </research_routing_system>
