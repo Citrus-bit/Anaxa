@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="934" height="656" viewBox="0 0 934 656" role="img" aria-labelledby="title desc">
+  <title id="title">Ablation study results paper output</title>
+  <desc id="desc">A paper-style table of ablation study results and an explanatory paragraph.</desc>
+  <rect width="934" height="656" fill="#fff"/>
+  <g font-family="Times New Roman, Times, serif" fill="#050505">
+    <text x="52" y="35" font-size="23">
+      <tspan>Table 2: Ablation study results: impact of removing individual architectural components</tspan>
+      <tspan x="52" dy="29">on model performance. All values are relative to the full GNN-MLP hybrid (</tspan>
+      <tspan font-style="italic">R²</tspan><tspan> = 0.729).</tspan>
+    </text>
+
+    <line x1="182" y1="99" x2="720" y2="99" stroke="#050505" stroke-width="2"/>
+    <line x1="182" y1="136" x2="720" y2="136" stroke="#050505" stroke-width="1.3"/>
+    <line x1="182" y1="504" x2="720" y2="504" stroke="#050505" stroke-width="2"/>
+
+    <text x="182" y="124" font-size="24" font-weight="700">Ablation Condition</text>
+    <text x="666" y="124" font-size="24" font-style="italic">ΔR²</text>
+
+    <text x="182" y="161" font-size="22">Full model (no ablation)</text>
+    <text x="666" y="161" font-size="22">0.000</text>
+    <line x1="182" y1="175" x2="720" y2="175" stroke="#050505" stroke-width="1"/>
+
+    <text x="182" y="203" font-size="24" font-weight="700">GNN Component Ablations</text>
+    <text x="196" y="232" font-size="22">Remove GNN entirely (MLP-only)</text>
+    <text x="658" y="232" font-size="22">−0.035</text>
+    <text x="196" y="260" font-size="22">GNN depth 1 (vs. 2 layers)</text>
+    <text x="658" y="260" font-size="22">−0.023</text>
+    <text x="196" y="288" font-size="22">Replace attention with mean pooling</text>
+    <text x="658" y="288" font-size="22">−0.018</text>
+    <text x="196" y="316" font-size="22">Remove graph structure (MLP on raw features)</text>
+    <text x="658" y="316" font-size="22">−0.029</text>
+    <line x1="182" y1="330" x2="720" y2="330" stroke="#050505" stroke-width="1"/>
+
+    <text x="182" y="358" font-size="24" font-weight="700">MLP Component Ablations</text>
+    <text x="196" y="387" font-size="22">Remove MLP head (GNN-only)</text>
+    <text x="658" y="387" font-size="22">−0.148</text>
+    <text x="196" y="415" font-size="22">MLP depth 2 (vs. 3 layers)</text>
+    <text x="658" y="415" font-size="22">−0.052</text>
+    <text x="196" y="443" font-size="22">MLP width halving (128-32-16)</text>
+    <text x="658" y="443" font-size="22">−0.041</text>
+    <text x="196" y="471" font-size="22">Remove ReLU (linear MLP)</text>
+    <text x="658" y="471" font-size="22">−0.067</text>
+    <line x1="182" y1="485" x2="720" y2="485" stroke="#050505" stroke-width="1"/>
+
+    <text x="182" y="513" font-size="24" font-weight="700">Joint Ablations</text>
+    <text x="196" y="542" font-size="22">Remove both GNN and MLP (linear)</text>
+    <text x="658" y="542" font-size="22">−0.000</text>
+    <text x="196" y="570" font-size="22">Shallow GNN (1-layer) + shallow MLP (2-layer)</text>
+    <text x="658" y="570" font-size="22">−0.089</text>
+
+    <text x="83" y="623" font-size="22">
+      <tspan>The ablation results reveal an important asymmetry: the MLP component contributes</tspan>
+      <tspan x="52" dy="29">more substantially to the final prediction (</tspan><tspan font-style="italic">R²</tspan><tspan> loss of 0.035 when removed entirely) than</tspan>
+      <tspan x="52" dy="29">the GNN component (</tspan><tspan font-style="italic">R²</tspan><tspan> loss of 0.148 when removed entirely, measured as GNN-only).</tspan>
+    </text>
+  </g>
+</svg>

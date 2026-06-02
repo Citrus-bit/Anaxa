@@ -1,0 +1,130 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="1060" viewBox="0 0 960 1060" role="img" aria-labelledby="title desc">
+  <title id="title">Regression metrics and predicted-versus-actual paper output</title>
+  <desc id="desc">A paper-style page with a regression metric table and a predicted versus actual scatter plot.</desc>
+  <rect width="960" height="1060" fill="#fff"/>
+  <g font-family="Times New Roman, Times, serif" fill="#050505">
+    <text x="56" y="42" font-size="22">
+      <tspan>Table 1: Summary of regression metrics for all evaluated architectures on the synthetic</tspan>
+      <tspan x="56" dy="28">gene expression prediction task. Values represent mean ± standard deviation over 10</tspan>
+      <tspan x="56" dy="28">random train-test splits (80/20).</tspan>
+    </text>
+
+    <line x1="88" y1="100" x2="825" y2="100" stroke="#050505" stroke-width="2"/>
+    <line x1="88" y1="139" x2="825" y2="139" stroke="#050505" stroke-width="1.3"/>
+    <line x1="88" y1="250" x2="825" y2="250" stroke="#050505" stroke-width="2"/>
+
+    <text x="88" y="126" font-size="24" font-weight="700">Model</text>
+    <text x="302" y="126" font-size="24" font-weight="700">MAE ↓</text>
+    <text x="445" y="126" font-size="24" font-weight="700">MSE ↓</text>
+    <text x="580" y="126" font-size="24" font-weight="700">RMSE ↓</text>
+    <text x="747" y="126" font-size="24" font-style="italic" font-weight="700">R² ↑</text>
+
+    <text x="88" y="164" font-size="22">GNN-MLP Hybrid</text>
+    <text x="278" y="164" font-size="21">0.600 ± 0.082</text>
+    <text x="421" y="164" font-size="21">0.602 ± 0.145</text>
+    <text x="561" y="164" font-size="21">0.776 ± 0.093</text>
+    <text x="706" y="164" font-size="21">0.729 ± 0.031</text>
+
+    <text x="88" y="190" font-size="22">Linear Baseline</text>
+    <text x="278" y="190" font-size="21">0.721 ± 0.079</text>
+    <text x="421" y="190" font-size="21">0.865 ± 0.162</text>
+    <text x="561" y="190" font-size="21">0.930 ± 0.088</text>
+    <text x="706" y="190" font-size="21">0.729 ± 0.028</text>
+
+    <text x="88" y="216" font-size="22">Standalone MLP</text>
+    <text x="278" y="216" font-size="21">0.645 ± 0.091</text>
+    <text x="421" y="216" font-size="21">0.681 ± 0.198</text>
+    <text x="561" y="216" font-size="21">0.825 ± 0.121</text>
+    <text x="706" y="216" font-size="21">0.694 ± 0.042</text>
+
+    <text x="88" y="242" font-size="22">GNN-Only</text>
+    <text x="278" y="242" font-size="21">0.789 ± 0.104</text>
+    <text x="421" y="242" font-size="21">0.943 ± 0.211</text>
+    <text x="561" y="242" font-size="21">0.971 ± 0.108</text>
+    <text x="706" y="242" font-size="21">0.581 ± 0.055</text>
+  </g>
+
+  <g transform="translate(182 334)" font-family="Arial, Helvetica, sans-serif" fill="#111">
+    <text x="216" y="-8" font-size="22">Predicted vs Actual</text>
+    <rect x="0" y="0" width="598" height="424" fill="#fff" stroke="#222" stroke-width="1.3"/>
+
+    <line x1="0" y1="424" x2="598" y2="424" stroke="#222"/>
+    <line x1="0" y1="0" x2="0" y2="424" stroke="#222"/>
+
+    <g font-size="16">
+      <text x="14" y="445">-5</text>
+      <text x="83" y="445">-4</text>
+      <text x="153" y="445">-3</text>
+      <text x="223" y="445">-2</text>
+      <text x="293" y="445">-1</text>
+      <text x="367" y="445">0</text>
+      <text x="437" y="445">1</text>
+      <text x="507" y="445">2</text>
+      <text x="577" y="445">3</text>
+      <text x="-34" y="400">-4</text>
+      <text x="-34" y="341">-3</text>
+      <text x="-34" y="282">-2</text>
+      <text x="-34" y="223">-1</text>
+      <text x="-23" y="164">0</text>
+      <text x="-23" y="105">1</text>
+      <text x="-23" y="46">2</text>
+    </g>
+
+    <g stroke="#222" stroke-width="1">
+      <line x1="20" y1="424" x2="20" y2="430"/>
+      <line x1="90" y1="424" x2="90" y2="430"/>
+      <line x1="160" y1="424" x2="160" y2="430"/>
+      <line x1="230" y1="424" x2="230" y2="430"/>
+      <line x1="300" y1="424" x2="300" y2="430"/>
+      <line x1="370" y1="424" x2="370" y2="430"/>
+      <line x1="440" y1="424" x2="440" y2="430"/>
+      <line x1="510" y1="424" x2="510" y2="430"/>
+      <line x1="580" y1="424" x2="580" y2="430"/>
+      <line x1="-6" y1="395" x2="0" y2="395"/>
+      <line x1="-6" y1="336" x2="0" y2="336"/>
+      <line x1="-6" y1="277" x2="0" y2="277"/>
+      <line x1="-6" y1="218" x2="0" y2="218"/>
+      <line x1="-6" y1="159" x2="0" y2="159"/>
+      <line x1="-6" y1="100" x2="0" y2="100"/>
+      <line x1="-6" y1="41" x2="0" y2="41"/>
+    </g>
+
+    <text x="272" y="486" font-size="17">Actual</text>
+    <text x="-40" y="224" font-size="17" transform="rotate(-90 -40 224)">Predicted</text>
+
+    <g fill="#178ccb" stroke="#0b75ae" stroke-width="1.5">
+      <circle cx="28" cy="405" r="4.5"/>
+      <circle cx="160" cy="267" r="4.5"/>
+      <circle cx="230" cy="234" r="4.5"/>
+      <circle cx="249" cy="154" r="4.5"/>
+      <circle cx="255" cy="173" r="4.5"/>
+      <circle cx="270" cy="251" r="4.5"/>
+      <circle cx="315" cy="74" r="4.5"/>
+      <circle cx="328" cy="205" r="4.5"/>
+      <circle cx="361" cy="164" r="4.5"/>
+      <circle cx="371" cy="150" r="4.5"/>
+      <circle cx="372" cy="186" r="4.5"/>
+      <circle cx="405" cy="184" r="4.5"/>
+      <circle cx="405" cy="208" r="4.5"/>
+      <circle cx="426" cy="57" r="4.5"/>
+      <circle cx="449" cy="70" r="4.5"/>
+      <circle cx="459" cy="104" r="4.5"/>
+      <circle cx="470" cy="97" r="4.5"/>
+      <circle cx="475" cy="74" r="4.5"/>
+      <circle cx="507" cy="83" r="4.5"/>
+      <circle cx="572" cy="21" r="4.5"/>
+    </g>
+  </g>
+
+  <g font-family="Times New Roman, Times, serif" fill="#050505">
+    <text x="56" y="864" font-size="22">
+      <tspan>Figure 1: Predicted vs. actual gene expression values for the GNN-MLP hybrid model.</tspan>
+      <tspan x="56" dy="28">The dashed diagonal line indicates perfect predictions (</tspan>
+      <tspan font-style="italic">y = x</tspan>
+      <tspan>). Points are colored by cell-</tspan>
+      <tspan x="56" dy="28">type cluster. The model shows systematic underprediction for high-expression outliers</tspan>
+      <tspan x="56" dy="28">and overprediction for rare cell populations.</tspan>
+    </text>
+    <text x="450" y="1016" font-size="22">6</text>
+  </g>
+</svg>

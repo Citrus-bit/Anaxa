@@ -36,6 +36,26 @@ Anaxa 是一个面向科研工作流的开源智能体系统。它不是普通�
 - LaTeX 论文 bundle、BibTeX、citation audit 和 PDF 的一次性导出。
 - 长任务、阶段性科研项目和需要人工批准的自动化研究流程。
 
+## 论文产物示例
+
+以下图片为论文/报告生成流程中的产物示例，仅用于展示 Anaxa 可整理的论文级表格、图表、公式和分析页面形态。示例内容只供参考，不构成本项目的正式实验结论、性能承诺或领域事实声明。
+
+<p align="center">
+  <img src="./docs/assets/paper-products/regression-metrics-predicted-actual.svg" alt="论文产物示例：回归指标表与预测值对真实值散点图" width="760">
+</p>
+
+<p align="center">
+  <img src="./docs/assets/paper-products/scfm-vcfm-evaluation.svg" alt="论文产物示例：scFM 与 VCFM 评估要求对比页面" width="760">
+</p>
+
+<p align="center">
+  <img src="./docs/assets/paper-products/hybrid-template-mlp-limits.svg" alt="论文产物示例：混合模型公式与 MLP 结构限制分析页面" width="760">
+</p>
+
+<p align="center">
+  <img src="./docs/assets/paper-products/ablation-study-results.svg" alt="论文产物示例：消融实验结果表" width="760">
+</p>
+
 ## 核心科研流程
 
 Anaxa 的研究链路围绕 `ResearchQuest` 展开。它把一个科研任务拆成可检查、可恢复的阶段：

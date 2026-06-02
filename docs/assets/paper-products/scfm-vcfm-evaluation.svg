@@ -1,0 +1,110 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1010" height="1384" viewBox="0 0 1010 1384" role="img" aria-labelledby="title desc">
+  <title id="title">Conceptual distinction between current scFMs and VCFM objectives</title>
+  <desc id="desc">A paper-style page showing a table that compares typical scFM emphasis with stricter VCFM requirements.</desc>
+  <rect width="1010" height="1384" fill="#fff"/>
+  <g font-family="Times New Roman, Times, serif" fill="#050505">
+    <text x="90" y="52" font-size="22">Table 1: Conceptual distinction between current scFMs and the stricter VCFM objective.</text>
+
+    <line x1="64" y1="82" x2="984" y2="82" stroke="#050505" stroke-width="2"/>
+    <line x1="64" y1="121" x2="984" y2="121" stroke="#050505" stroke-width="1.4"/>
+    <line x1="64" y1="515" x2="984" y2="515" stroke="#050505" stroke-width="2"/>
+
+    <text x="75" y="108" font-size="24" font-weight="700">Dimension</text>
+    <text x="344" y="108" font-size="24" font-weight="700">Typical scFM emphasis</text>
+    <text x="654" y="108" font-size="24" font-weight="700">VCFM requirement</text>
+
+    <text x="75" y="147" font-size="22">Primary objective</text>
+    <text x="344" y="147" font-size="22">
+      <tspan>General cellular representa-</tspan>
+      <tspan x="344" dy="26">tions</tspan>
+    </text>
+    <text x="654" y="147" font-size="22">
+      <tspan>Faithful virtualized cellular be-</tspan>
+      <tspan x="654" dy="26">havior</tspan>
+    </text>
+
+    <text x="75" y="201" font-size="22">Data view</text>
+    <text x="344" y="201" font-size="22">Mostly static observations</text>
+    <text x="654" y="201" font-size="22">
+      <tspan>Static + dynamic + perturba-</tspan>
+      <tspan x="654" dy="26">tional + multimodal</tspan>
+    </text>
+
+    <text x="75" y="255" font-size="22">Downstream focus</text>
+    <text x="344" y="255" font-size="22">
+      <tspan>Annotation, retrieval, integra-</tspan>
+      <tspan x="344" dy="26">tion</tspan>
+    </text>
+    <text x="654" y="255" font-size="22">
+      <tspan>Intervention, simulation, mecha-</tspan>
+      <tspan x="654" dy="26">nism, forecasting</tspan>
+    </text>
+
+    <text x="75" y="309" font-size="22">Generalization target</text>
+    <text x="344" y="309" font-size="22">Across datasets/tasks</text>
+    <text x="654" y="309" font-size="22">
+      <tspan>Across unseen perturbations,</tspan>
+      <tspan x="654" dy="26">states, and contexts</tspan>
+    </text>
+
+    <text x="75" y="364" font-size="22">Interpretation standard</text>
+    <text x="344" y="364" font-size="22">Useful embeddings/features</text>
+    <text x="654" y="364" font-size="22">
+      <tspan>Intervention-relevant, mechanisti-</tspan>
+      <tspan x="654" dy="26">cally constrained reasoning</tspan>
+    </text>
+
+    <text x="75" y="419" font-size="22">Uncertainty role</text>
+    <text x="344" y="419" font-size="22">Often secondary</text>
+    <text x="654" y="419" font-size="22">
+      <tspan>Central for safe virtual experimen-</tspan>
+      <tspan x="654" dy="26">tation</tspan>
+    </text>
+
+    <text x="75" y="473" font-size="22">Failure tolerance</text>
+    <text x="344" y="473" font-size="22">
+      <tspan>Moderate benchmark degra-</tspan>
+      <tspan x="344" dy="26">dation</tspan>
+    </text>
+    <text x="654" y="473" font-size="22">
+      <tspan>High penalty for implausible or</tspan>
+      <tspan x="654" dy="26">misleading simulations</tspan>
+    </text>
+
+    <text x="52" y="578" font-size="30" font-weight="700">3</text>
+    <text x="101" y="578" font-size="30" font-weight="700">Why VCFMs Require Stricter Evaluation Than Current scFMs</text>
+
+    <text x="52" y="632" font-size="26" font-weight="700">3.1</text>
+    <text x="113" y="632" font-size="26" font-weight="700">Representation quality is not enough</text>
+
+    <text x="52" y="676" font-size="22">
+      <tspan>Most current scFM benchmarks prioritize tasks such as cell type annotation, batch correction,</tspan>
+      <tspan x="52" dy="31">clustering, retrieval, imputation, and masked reconstruction. These tasks are useful for evaluating</tspan>
+      <tspan x="52" dy="31">representation quality, but they only partially probe whether a model captures the functional</tspan>
+      <tspan x="52" dy="31">organization of cellular systems. A model can succeed on them by learning smooth correlational</tspan>
+      <tspan x="52" dy="31">structure without acquiring intervention-relevant knowledge.</tspan>
+      <tspan x="87" dy="31">This limitation becomes especially important when models are described as virtual cells. The</tspan>
+      <tspan x="52" dy="31">term suggests that the model can support in silico experimentation. Yet a cell embedding bench-</tspan>
+      <tspan x="52" dy="31">mark tells us little about whether the model can predict the direction, magnitude, or heterogeneity</tspan>
+      <tspan x="52" dy="31">of response under targeted perturbation. Similarly, strong integration performance does not imply</tspan>
+      <tspan x="52" dy="31">correct temporal ordering, causal structure, or plausible cross-modal coupling.</tspan>
+    </text>
+
+    <text x="52" y="1024" font-size="26" font-weight="700">3.2</text>
+    <text x="113" y="1024" font-size="26" font-weight="700">VCFMs make stronger scientific claims</text>
+
+    <text x="52" y="1068" font-size="22">
+      <tspan>A VCFM, explicitly or implicitly, makes a stronger claim than “I encode cells well.” It suggests that</tspan>
+      <tspan x="52" dy="31">the model can be used to reason about latent mechanisms, anticipate novel responses, and generate</tspan>
+      <tspan x="52" dy="31">realistic state trajectories. These claims are closer to surrogate experimentation than to generic</tspan>
+      <tspan x="52" dy="31">feature extraction. As a result, evaluation must move from surface-level predictive convenience</tspan>
+      <tspan x="52" dy="31">toward deeper tests of model validity.</tspan>
+      <tspan x="87" dy="31">This stricter standard is not a matter of rhetorical purity; it is a matter of scientific risk. If</tspan>
+      <tspan x="52" dy="31">a model is used to prioritize perturbations, nominate targets, infer regulatory control points, or</tspan>
+      <tspan x="52" dy="31">simulate unseen conditions, then errors are qualitatively different from ordinary classification mis-</tspan>
+      <tspan x="52" dy="31">takes. The cost of biologically implausible predictions can be high, especially when such predictions</tspan>
+    </text>
+
+    <text x="504" y="1348" text-anchor="middle" font-size="22">4</text>
+  </g>
+</svg>

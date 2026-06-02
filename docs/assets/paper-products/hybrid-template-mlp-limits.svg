@@ -1,0 +1,90 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="940" height="1170" viewBox="0 0 940 1170" role="img" aria-labelledby="title desc">
+  <title id="title">Hybrid template and MLP-centered design limitations</title>
+  <desc id="desc">A paper-style page with a generic hybrid model formulation and text about why MLP-centered designs are structurally limited.</desc>
+  <rect width="940" height="1170" fill="#fff"/>
+  <g font-family="Times New Roman, Times, serif" fill="#050505">
+    <text x="85" y="58" font-size="21">A generic hybrid template satisfying these desiderata can be written as</text>
+
+    <text x="305" y="104" font-size="22" font-style="italic">
+      <tspan>z</tspan><tspan baseline-shift="sub" font-size="15">i</tspan><tspan baseline-shift="super" font-size="15">global</tspan>
+      <tspan font-style="normal"> = Attn</tspan><tspan baseline-shift="sub" font-size="15">θ</tspan><tspan>(t</tspan><tspan baseline-shift="sub" font-size="15">i</tspan><tspan>, T),</tspan>
+    </text>
+    <text x="846" y="104" font-size="22">(7)</text>
+
+    <text x="305" y="138" font-size="22" font-style="italic">
+      <tspan>z</tspan><tspan baseline-shift="sub" font-size="15">i</tspan><tspan baseline-shift="super" font-size="15">local</tspan>
+      <tspan font-style="normal"> = Msg</tspan><tspan baseline-shift="sub" font-size="15">θ</tspan><tspan>(i, N(i), E),</tspan>
+    </text>
+    <text x="846" y="138" font-size="22">(8)</text>
+
+    <text x="272" y="181" font-size="22" font-style="italic">
+      <tspan>g</tspan><tspan baseline-shift="sub" font-size="15">i</tspan>
+      <tspan font-style="normal"> = σ ( W</tspan><tspan baseline-shift="sub" font-size="15">g</tspan>
+      <tspan>[z</tspan><tspan baseline-shift="sub" font-size="15">i</tspan><tspan baseline-shift="super" font-size="15">global</tspan>
+      <tspan> || z</tspan><tspan baseline-shift="sub" font-size="15">i</tspan><tspan baseline-shift="super" font-size="15">local</tspan>
+      <tspan> || m</tspan><tspan baseline-shift="sub" font-size="15">i</tspan><tspan>] + b</tspan><tspan baseline-shift="sub" font-size="15">g</tspan><tspan font-style="normal"> ) ,</tspan>
+    </text>
+    <text x="846" y="181" font-size="22">(9)</text>
+
+    <text x="315" y="224" font-size="22" font-style="italic">
+      <tspan>z</tspan><tspan baseline-shift="sub" font-size="15">i</tspan>
+      <tspan font-style="normal"> = </tspan><tspan>g</tspan><tspan baseline-shift="sub" font-size="15">i</tspan>
+      <tspan font-style="normal"> ⊙ </tspan><tspan>z</tspan><tspan baseline-shift="sub" font-size="15">i</tspan><tspan baseline-shift="super" font-size="15">global</tspan>
+      <tspan font-style="normal"> + (1 − </tspan><tspan>g</tspan><tspan baseline-shift="sub" font-size="15">i</tspan><tspan font-style="normal">) ⊙ </tspan>
+      <tspan>z</tspan><tspan baseline-shift="sub" font-size="15">i</tspan><tspan baseline-shift="super" font-size="15">local</tspan><tspan>,</tspan>
+    </text>
+    <text x="846" y="224" font-size="22">(10)</text>
+
+    <text x="54" y="288" font-size="21">
+      <tspan>where </tspan><tspan font-style="italic">T</tspan><tspan> is the token collection, </tspan><tspan font-style="italic">E</tspan><tspan> optional structured edges, and </tspan>
+      <tspan font-style="italic">m</tspan><tspan baseline-shift="sub" font-size="14">i</tspan><tspan> metadata. This formulation</tspan>
+      <tspan x="54" dy="28">is intentionally abstract: it does not assume that graph structure is always correct, but it also does</tspan>
+      <tspan x="54" dy="28">not discard useful local inductive bias when such structure is informative.</tspan>
+      <tspan x="83" dy="28">Training can then be framed as a multi-objective problem,</tspan>
+    </text>
+
+    <text x="105" y="416" font-size="23" font-style="italic">
+      <tspan>L</tspan><tspan font-style="normal"> = λ</tspan><tspan baseline-shift="sub" font-size="15">mask</tspan><tspan>L</tspan><tspan baseline-shift="sub" font-size="15">mask</tspan>
+      <tspan font-style="normal"> + λ</tspan><tspan baseline-shift="sub" font-size="15">contrast</tspan><tspan>L</tspan><tspan baseline-shift="sub" font-size="15">contrast</tspan>
+      <tspan font-style="normal"> + λ</tspan><tspan baseline-shift="sub" font-size="15">spatial</tspan><tspan>L</tspan><tspan baseline-shift="sub" font-size="15">spatial</tspan>
+      <tspan font-style="normal"> + λ</tspan><tspan baseline-shift="sub" font-size="15">perturb</tspan><tspan>L</tspan><tspan baseline-shift="sub" font-size="15">perturb</tspan>
+      <tspan font-style="normal"> + λ</tspan><tspan baseline-shift="sub" font-size="15">prior</tspan><tspan>L</tspan><tspan baseline-shift="sub" font-size="15">prior</tspan><tspan>,</tspan>
+    </text>
+    <text x="846" y="416" font-size="22">(11)</text>
+
+    <text x="54" y="468" font-size="21">
+      <tspan>with terms enabled only when the modality and annotation context justify them. This provides a</tspan>
+      <tspan x="54" dy="28">formal lens through which MLP, GNN, transformer, and hybrid choices can be compared on equal</tspan>
+      <tspan x="54" dy="28">footing.</tspan>
+    </text>
+
+    <text x="54" y="564" font-size="30" font-weight="700">4</text>
+    <text x="101" y="564" font-size="30" font-weight="700">Why MLP-Centered Designs Are Structurally Limited</text>
+
+    <text x="54" y="616" font-size="26" font-weight="700">4.1</text>
+    <text x="142" y="616" font-size="26" font-weight="700">Weak relational inductive bias</text>
+
+    <text x="54" y="660" font-size="21">
+      <tspan>The first limitation of pure MLP backbones is conceptual. Dense feed-forward mappings are well</tspan>
+      <tspan x="54" dy="29">suited to learn nonlinear transformations of fixed vectors, but they do not impose any structural</tspan>
+      <tspan x="54" dy="29">prior over gene-gene, cell-cell, or cell-niche relationships. In omics, this omission is consequential</tspan>
+      <tspan x="54" dy="29">rather than cosmetic. Cell identity often depends on coordinated programs spanning pathways,</tspan>
+      <tspan x="54" dy="29">regulators, and neighboring cells rather than on isolated count values. Spatial analyses further</tspan>
+      <tspan x="54" dy="29">require interactions across physical neighborhoods, tissue compartments, and histological cues. An</tspan>
+      <tspan x="54" dy="29">MLP can approximate such dependencies only indirectly after the relationships have already been</tspan>
+      <tspan x="54" dy="29">encoded into the input features by preprocessing or feature engineering.</tspan>
+      <tspan x="83" dy="29">This is one reason pure MLP backbones are rare in recent scFM surveys relative to transformer,</tspan>
+      <tspan x="54" dy="29">variational, and graph-aware designs </tspan><tspan fill="#0645ad">(Harrison and Johansson, 2026)</tspan><tspan>. The absence of a native</tspan>
+      <tspan x="54" dy="29">relational mechanism places an excessive burden on tokenization, normalization, or handcrafted</tspan>
+      <tspan x="54" dy="29">priors before learning even begins.</tspan>
+    </text>
+
+    <text x="54" y="1028" font-size="26" font-weight="700">4.2</text>
+    <text x="142" y="1028" font-size="26" font-weight="700">Compression amplifies biological information loss</text>
+    <text x="54" y="1072" font-size="21">
+      <tspan>Single-cell data are sparse, long-tailed, and heavily affected by technical noise. When such mea-</tspan>
+      <tspan x="54" dy="29">surements are mapped directly into dense latent vectors using coarse preprocessing and standard</tspan>
+      <tspan x="54" dy="29">feed-forward blocks, fine-grained biological distinctions can be attenuated.</tspan>
+    </text>
+  </g>
+</svg>
