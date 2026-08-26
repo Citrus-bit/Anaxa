@@ -11,6 +11,8 @@ from langgraph.graph import END
 from langgraph.prebuilt.tool_node import ToolCallRequest
 from langgraph.types import Command
 
+ASK_CLARIFICATION_TOOL_NAME = "ask_clarification"
+
 
 class ClarificationMiddlewareState(AgentState):
     """Compatible with the `ThreadState` schema."""
@@ -109,6 +111,37 @@ class ClarificationMiddleware(AgentMiddleware[ClarificationMiddlewareState]):
             filtered.append(block)
         return filtered
 
+    @staticmethod
+    def _filter_raw_tool_calls(
+        additional_kwargs: dict[str, Any], kept_ids: set[str], kept_names: set[str]
+    ) -> dict[str, Any]:
+        """Keep raw provider tool-call metadata in sync with structured calls."""
+        raw_tool_calls = additional_kwargs.get("tool_calls")
+        if not isinstance(raw_tool_calls, list):
+            return additional_kwargs
+
+        filtered: list[Any] = []
+        for raw_call in raw_tool_calls:
+            if not isinstance(raw_call, dict):
+                filtered.append(raw_call)
+                continue
+            call_id = raw_call.get("id")
+            function = raw_call.get("function")
+            call_name = raw_call.get("name")
+            if isinstance(function, dict):
+                call_name = function.get("name", call_name)
+            if isinstance(call_id, str) and call_id:
+                if call_id in kept_ids:
+                    filtered.append(raw_call)
+            elif isinstance(call_name, str) and call_name in kept_names:
+                filtered.append(raw_call)
+
+        if filtered:
+            additional_kwargs["tool_calls"] = filtered
+        else:
+            additional_kwargs.pop("tool_calls", None)
+        return additional_kwargs
+
     def _drop_parallel_siblings(self, state: ClarificationMiddlewareState, runtime: Any) -> dict[str, Any] | None:
         """Keep clarification calls from executing alongside unrelated tools."""
         context = getattr(runtime, "context", None)
@@ -119,28 +152,45 @@ class ClarificationMiddleware(AgentMiddleware[ClarificationMiddlewareState]):
         if not messages or not isinstance(messages[-1], AIMessage):
             return None
         last = messages[-1]
-        tool_calls = list(last.tool_calls or [])
+        tool_calls = [call for call in (last.tool_calls or []) if isinstance(call, dict)]
+        invalid_tool_calls = [
+            call
+            for call in (getattr(last, "invalid_tool_calls", None) or [])
+            if isinstance(call, dict)
+        ]
         clarification_calls = [
-            call for call in tool_calls if call.get("name") == "ask_clarification"
+            call for call in tool_calls if call.get("name") == ASK_CLARIFICATION_TOOL_NAME
+        ]
+        invalid_clarification_calls = [
+            call for call in invalid_tool_calls if call.get("name") == ASK_CLARIFICATION_TOOL_NAME
         ]
         sibling_calls = [
-            call for call in tool_calls if call.get("name") != "ask_clarification"
+            call for call in tool_calls if call.get("name") != ASK_CLARIFICATION_TOOL_NAME
         ]
-        if not clarification_calls or not sibling_calls:
+        if (not clarification_calls and not invalid_clarification_calls) or not sibling_calls:
             return None
 
         kept_ids = {
             str(call["id"])
-            for call in clarification_calls
+            for call in [*clarification_calls, *invalid_clarification_calls]
             if isinstance(call.get("id"), str) and call["id"]
         }
         kept_names = {
             str(call["name"])
-            for call in clarification_calls
+            for call in [*clarification_calls, *invalid_clarification_calls]
             if isinstance(call.get("name"), str) and call["name"]
         }
         content = self._filter_tool_use_content(last.content, kept_ids, kept_names)
-        patched = last.model_copy(update={"tool_calls": clarification_calls, "content": content})
+        additional_kwargs = self._filter_raw_tool_calls(
+            dict(getattr(last, "additional_kwargs", {}) or {}), kept_ids, kept_names
+        )
+        patched = last.model_copy(
+            update={
+                "tool_calls": clarification_calls,
+                "content": content,
+                "additional_kwargs": additional_kwargs,
+            }
+        )
         return {"messages": [patched]}
 
     def _is_chinese(self, text: str) -> bool:
@@ -287,7 +337,7 @@ class ClarificationMiddleware(AgentMiddleware[ClarificationMiddlewareState]):
             Command that interrupts execution with the formatted clarification message
         """
         # Check if this is an ask_clarification tool call
-        if request.tool_call.get("name") != "ask_clarification":
+        if request.tool_call.get("name") != ASK_CLARIFICATION_TOOL_NAME:
             # Not a clarification call, execute normally
             return handler(request)
 
@@ -309,7 +359,7 @@ class ClarificationMiddleware(AgentMiddleware[ClarificationMiddlewareState]):
             Command that interrupts execution with the formatted clarification message
         """
         # Check if this is an ask_clarification tool call
-        if request.tool_call.get("name") != "ask_clarification":
+        if request.tool_call.get("name") != ASK_CLARIFICATION_TOOL_NAME:
             # Not a clarification call, execute normally
             return await handler(request)
 

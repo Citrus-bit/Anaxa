@@ -2,11 +2,15 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from langchain_core.messages import AIMessage, ToolMessage
+from langchain.agents import create_agent
+from langchain.tools import tool
+from langchain_core.language_models.fake_chat_models import FakeMessagesListChatModel
+from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langgraph.graph import END
 from langgraph.prebuilt.tool_node import ToolCallRequest
 
 from medrix_flow.agents.middlewares.clarification_middleware import ClarificationMiddleware
+from medrix_flow.tools.builtins.clarification_tool import ask_clarification_tool
 
 
 def _request(*, synthetic_data_mode: bool, question: str, context: str | None = None) -> ToolCallRequest:
@@ -139,3 +143,97 @@ def test_after_model_keeps_siblings_when_clarification_is_disabled() -> None:
     )
 
     assert result is None
+
+
+def test_agent_graph_does_not_execute_sibling_tool_before_clarification() -> None:
+    calls: list[str] = []
+
+    @tool
+    def bash(command: str) -> str:
+        """Run a shell command for the integration-test sentinel."""
+        calls.append(command)
+        return "executed"
+
+    class FakeToolCallingModel(FakeMessagesListChatModel):
+        def bind_tools(self, tools, **kwargs):
+            return self
+
+    model = FakeToolCallingModel(
+        responses=[
+            AIMessage(
+                content="",
+                tool_calls=[
+                    {
+                        "id": "clarify-1",
+                        "name": "ask_clarification",
+                        "args": {
+                            "question": "Which directory?",
+                            "clarification_type": "missing_info",
+                        },
+                    },
+                    {"id": "bash-1", "name": "bash", "args": {"command": "touch /tmp/should-not-run"}},
+                ],
+            )
+        ]
+    )
+    graph = create_agent(
+        model,
+        tools=[bash, ask_clarification_tool],
+        middleware=[ClarificationMiddleware()],
+    )
+
+    result = graph.invoke({"messages": [HumanMessage(content="Please continue.")]})
+
+    assert calls == []
+    assert [message.name for message in result["messages"] if isinstance(message, ToolMessage)] == [
+        "ask_clarification"
+    ]
+
+
+def test_after_model_drops_siblings_when_clarification_args_are_invalid() -> None:
+    middleware = ClarificationMiddleware()
+    message = AIMessage(
+        content=[
+            {"type": "text", "text": "asking"},
+            {"type": "tool_use", "id": "clarify-1", "name": "ask_clarification", "input": "{"},
+            {"type": "tool_use", "id": "bash-1", "name": "bash", "input": {"command": "rm -rf /"}},
+        ],
+        tool_calls=[
+            {"id": "bash-1", "name": "bash", "args": {"command": "rm -rf /"}},
+        ],
+        invalid_tool_calls=[
+            {
+                "type": "invalid_tool_call",
+                "id": "clarify-1",
+                "name": "ask_clarification",
+                "args": "{",
+                "error": "Failed to parse tool arguments",
+            }
+        ],
+        additional_kwargs={
+            "tool_calls": [
+                {
+                    "id": "clarify-1",
+                    "type": "function",
+                    "function": {"name": "ask_clarification", "arguments": "{"},
+                },
+                {
+                    "id": "bash-1",
+                    "type": "function",
+                    "function": {"name": "bash", "arguments": '{"command":"rm -rf /"}'},
+                },
+            ]
+        },
+    )
+
+    result = middleware.after_model({"messages": [message]}, SimpleNamespace(context={}))
+
+    assert result is not None
+    patched = result["messages"][0]
+    assert patched.tool_calls == []
+    assert [call["name"] for call in patched.invalid_tool_calls] == ["ask_clarification"]
+    assert patched.content == [
+        {"type": "text", "text": "asking"},
+        {"type": "tool_use", "id": "clarify-1", "name": "ask_clarification", "input": "{"},
+    ]
+    assert [call["id"] for call in patched.additional_kwargs["tool_calls"]] == ["clarify-1"]
