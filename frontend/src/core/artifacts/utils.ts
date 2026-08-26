@@ -15,6 +15,26 @@ export interface ArtifactInventoryEntry {
   source: "thread" | "outputs";
 }
 
+function decodePathSegment(segment: string) {
+  try {
+    return decodeURIComponent(segment);
+  } catch {
+    return segment;
+  }
+}
+
+function encodeArtifactPath(filepath: string) {
+  return filepath
+    .split("/")
+    .map((segment) => encodeURIComponent(decodePathSegment(segment)))
+    .join("/");
+}
+
+function splitPathSuffix(src: string) {
+  const [path = ""] = src.split(/[?#]/, 1);
+  return { path, suffix: src.slice(path.length) };
+}
+
 export function urlOfArtifact({
   filepath,
   threadId,
@@ -26,10 +46,12 @@ export function urlOfArtifact({
   download?: boolean;
   isMock?: boolean;
 }) {
+  const encodedThreadId = encodeURIComponent(threadId);
+  const encodedFilepath = encodeArtifactPath(filepath);
   if (isMock) {
-    return `${getBackendBaseURL()}/mock/api/threads/${threadId}/artifacts${filepath}${download ? "?download=true" : ""}`;
+    return `${getBackendBaseURL()}/mock/api/threads/${encodedThreadId}/artifacts${encodedFilepath}${download ? "?download=true" : ""}`;
   }
-  return `${getBackendBaseURL()}/api/threads/${threadId}/artifacts${filepath}${download ? "?download=true" : ""}`;
+  return `${getBackendBaseURL()}/api/threads/${encodedThreadId}/artifacts${encodedFilepath}${download ? "?download=true" : ""}`;
 }
 
 export function extractArtifactsFromThread(thread: AgentThread) {
@@ -37,7 +59,8 @@ export function extractArtifactsFromThread(thread: AgentThread) {
 }
 
 export function resolveArtifactURL(absolutePath: string, threadId: string) {
-  return `${getBackendBaseURL()}/api/threads/${threadId}/artifacts${absolutePath}`;
+  const { path, suffix } = splitPathSuffix(absolutePath);
+  return `${getBackendBaseURL()}/api/threads/${encodeURIComponent(threadId)}/artifacts${encodeArtifactPath(path)}${suffix}`;
 }
 
 function parseArtifactTime(value?: string) {

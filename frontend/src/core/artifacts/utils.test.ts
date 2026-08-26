@@ -62,3 +62,27 @@ describe("buildArtifactVersionKey", () => {
     expect(buildArtifactVersionKey(undefined)).toBeUndefined();
   });
 });
+
+describe("artifact URL helpers", () => {
+  it("encodes thread IDs and reserved characters in path segments", async () => {
+    const { resolveArtifactURL, urlOfArtifact } = await import("./utils");
+
+    expect(
+      urlOfArtifact({
+        filepath: "/mnt/user-data/outputs/a#b?.txt",
+        threadId: "thread #1",
+        download: true,
+      }),
+    ).toContain(
+      "/api/threads/thread%20%231/artifacts/mnt/user-data/outputs/a%23b%3F.txt?download=true",
+    );
+    expect(
+      resolveArtifactURL(
+        "/mnt/user-data/outputs/%E4%B8%AD%20%E6%96%87%23%3F.png?v=2#detail",
+        "thread #1",
+      ),
+    ).toContain(
+      "/api/threads/thread%20%231/artifacts/mnt/user-data/outputs/%E4%B8%AD%20%E6%96%87%23%3F.png?v=2#detail",
+    );
+  });
+});
