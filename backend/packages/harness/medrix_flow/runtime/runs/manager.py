@@ -121,6 +121,18 @@ class RunManager:
             if record is not None:
                 record.task = task
 
+    async def try_start(self, run_id: str) -> bool:
+        """Atomically admit a pending run unless cancellation already won."""
+        async with self._lock:
+            record = self._runs.get(run_id)
+            if record is None:
+                return False
+            if record.abort_event.is_set() or record.status is not RunStatus.pending:
+                return False
+            record.status = RunStatus.running
+            record.updated_at = now_iso()
+            return True
+
     async def get(self, run_id: str | None) -> RunRecord | None:
         if not run_id:
             return None

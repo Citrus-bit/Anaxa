@@ -84,6 +84,39 @@ def test_run_manager_rejects_interrupts_and_rolls_back():
     asyncio.run(scenario())
 
 
+def test_run_manager_does_not_start_a_cancelled_pending_run():
+    async def scenario():
+        manager = RunManager()
+        record = await manager.create_or_reject("thread-pending")
+
+        assert await manager.cancel(record.run_id) is True
+        assert await manager.try_start(record.run_id) is False
+        assert record.status is RunStatus.interrupted
+
+    asyncio.run(scenario())
+
+
+def test_gateway_worker_skips_cancelled_pending_run():
+    async def scenario():
+        service, db = await _make_runtime_service()
+        record = await service._run_manager.create_or_reject("thread-cancelled")
+        await service._run_manager.cancel(record.run_id)
+
+        body = runs.RunCreateRequest(
+            input={"messages": [{"type": "human", "content": "do work"}]},
+            assistant_id="lead_agent",
+        )
+        with patch("app.gateway.services.MedrixFlowClient") as client_cls:
+            await service._execute_gateway_run(record, body)
+
+        client_cls.assert_not_called()
+        assert record.status is RunStatus.interrupted
+        assert record.messages_complete is False
+        await db.close()
+
+    asyncio.run(scenario())
+
+
 def test_sqlite_repositories_persist_and_paginate():
     async def scenario():
         db = SQLiteRuntimeDB(":memory:")

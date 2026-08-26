@@ -351,8 +351,12 @@ class GatewayRunService:
         return refreshed or record
 
     async def _execute_gateway_run(self, record: RunRecord, body: Any) -> None:
+        started = False
+        final_status = RunStatus.interrupted
         try:
-            await self._run_manager.set_status(record.run_id, RunStatus.running)
+            started = await self._run_manager.try_start(record.run_id)
+            if not started:
+                return
             get_paths().ensure_thread_dirs(record.thread_id)
 
             context = getattr(body, "context", None) or {}
@@ -397,7 +401,8 @@ class GatewayRunService:
             )
             final_status = RunStatus.error
         finally:
-            await self.materialize_run_messages(record, finalize=True, final_status=final_status)
+            if started:
+                await self.materialize_run_messages(record, finalize=True, final_status=final_status)
             await self._stream_bridge.close(record.run_id)
 
     async def _persist_stream_event(self, record: RunRecord, event_type: str, data: dict[str, Any]) -> None:
