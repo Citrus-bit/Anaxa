@@ -60,11 +60,16 @@ export function MarkdownContent({
 
   if (!content) return null;
 
+  const safeRehypePlugins = [
+    ...(streamdownPlugins.rehypePlugins ?? []),
+    ...(rehypePlugins ?? []),
+  ];
+
   return (
     <MessageResponse
       className={className}
       remarkPlugins={remarkPlugins}
-      rehypePlugins={rehypePlugins}
+      rehypePlugins={safeRehypePlugins}
       components={components}
     >
       {content}

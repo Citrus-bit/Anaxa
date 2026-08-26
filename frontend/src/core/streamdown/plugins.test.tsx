@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { humanMessagePlugins, remarkHumanHtmlAsText } from "./plugins";
+import {
+  humanMessagePlugins,
+  rehypeSanitizeStep,
+  remarkHumanHtmlAsText,
+  streamdownPluginsWithWordAnimation,
+} from "./plugins";
 
 type TestNode = {
   type: string;
@@ -72,5 +77,12 @@ describe("human message Streamdown plugins", () => {
 
   it("registers the raw HTML textifier before math handling for human messages", () => {
     expect(humanMessagePlugins.remarkPlugins?.[0]).toBe(remarkHumanHtmlAsText);
+  });
+
+  it("keeps sanitization in custom rehype chains", () => {
+    expect(streamdownPluginsWithWordAnimation.rehypePlugins).toContain(
+      rehypeSanitizeStep,
+    );
+    expect(humanMessagePlugins.rehypePlugins).toContain(rehypeSanitizeStep);
   });
 });

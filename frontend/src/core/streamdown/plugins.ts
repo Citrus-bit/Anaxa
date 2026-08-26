@@ -9,6 +9,8 @@ import { visit } from "unist-util-visit";
 
 import { rehypeSplitWordsIntoSpans } from "../rehype";
 
+type RehypePlugin = NonNullable<StreamdownProps["rehypePlugins"]>[number];
+
 const katexClassPattern = /^katex(?:-|$)/;
 const mutedTextClassPattern = /^text-muted-foreground$/;
 
@@ -58,6 +60,11 @@ const sanitizedSchema = {
   ],
 };
 
+export const rehypeSanitizeStep = [
+  rehypeSanitize,
+  sanitizedSchema,
+] as RehypePlugin;
+
 export const streamdownPlugins = {
   remarkPlugins: [
     remarkGfm,
@@ -65,8 +72,8 @@ export const streamdownPlugins = {
   ] as StreamdownProps["remarkPlugins"],
   rehypePlugins: [
     rehypeRaw,
+    rehypeSanitizeStep,
     [rehypeKatex, { output: "html" }],
-    [rehypeSanitize, sanitizedSchema],
   ] as StreamdownProps["rehypePlugins"],
 };
 
@@ -76,6 +83,8 @@ export const streamdownPluginsWithWordAnimation = {
     [remarkMath, { singleDollarTextMath: true }],
   ] as StreamdownProps["remarkPlugins"],
   rehypePlugins: [
+    rehypeRaw,
+    rehypeSanitizeStep,
     [rehypeKatex, { output: "html" }],
     rehypeSplitWordsIntoSpans,
   ] as StreamdownProps["rehypePlugins"],
@@ -109,6 +118,7 @@ export const humanMessagePlugins = {
     [remarkMath, { singleDollarTextMath: true }],
   ] as StreamdownProps["remarkPlugins"],
   rehypePlugins: [
+    rehypeSanitizeStep,
     [rehypeKatex, { output: "html" }],
   ] as StreamdownProps["rehypePlugins"],
 };
