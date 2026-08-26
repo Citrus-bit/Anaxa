@@ -2,6 +2,7 @@ import os
 import shutil
 import subprocess
 
+from medrix_flow.sandbox.env_policy import build_sandbox_env
 from medrix_flow.sandbox.local.list_dir import list_dir
 from medrix_flow.sandbox.sandbox import Sandbox
 
@@ -38,6 +39,7 @@ class LocalSandbox(Sandbox):
             capture_output=True,
             text=True,
             timeout=600,
+            env=build_sandbox_env(),
         )
         output = result.stdout
         if result.stderr:
