@@ -1,7 +1,13 @@
 import type { Message } from "@langchain/langgraph-sdk";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { findClarificationResponse, groupMessages } from "./utils";
+import {
+  extractContentFromMessage,
+  extractReasoningContentFromMessage,
+  findClarificationResponse,
+  groupMessages,
+  hasReasoning,
+} from "./utils";
 
 describe("groupMessages", () => {
   afterEach(() => {
@@ -122,5 +128,31 @@ describe("findClarificationResponse", () => {
     );
 
     expect(response).toBeNull();
+  });
+});
+
+describe("inline reasoning extraction", () => {
+  it("reuses a split for unchanged message content", () => {
+    const message = {
+      type: "ai",
+      content: "<think>plan</think>Answer",
+    } as unknown as Message;
+
+    expect(extractContentFromMessage(message)).toBe("Answer");
+    expect(extractReasoningContentFromMessage(message)).toBe("plan");
+    expect(hasReasoning(message)).toBe(true);
+  });
+
+  it("invalidates the cache when a streaming message is mutated", () => {
+    const message = {
+      type: "ai",
+      content: "<think>first</think>Answer",
+    } as unknown as Message;
+
+    expect(extractReasoningContentFromMessage(message)).toBe("first");
+    message.content = "<think>second</think>Updated";
+
+    expect(extractContentFromMessage(message)).toBe("Updated");
+    expect(extractReasoningContentFromMessage(message)).toBe("second");
   });
 });
