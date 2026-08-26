@@ -3,7 +3,25 @@ import { renderHook, act, waitFor } from "@testing-library/react";
 import type { PropsWithChildren } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { threadStateSignature, useThreadStream } from "./hooks";
+import {
+  decideCoalesce,
+  threadStateSignature,
+  useThreadStream,
+} from "./hooks";
+
+describe("stream render coalescing", () => {
+  it("flushes immediately after the interval", () => {
+    expect(decideCoalesce(100, 20, 80, true)).toEqual({ action: "flush-now" });
+  });
+
+  it("schedules one trailing flush before the interval", () => {
+    expect(decideCoalesce(50, 20, 80, false)).toEqual({
+      action: "schedule",
+      delayMs: 50,
+    });
+    expect(decideCoalesce(50, 20, 80, true)).toEqual({ action: "wait" });
+  });
+});
 
 const mocks = vi.hoisted(() => ({
   registerThreadRun: vi.fn(),

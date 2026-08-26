@@ -161,6 +161,102 @@ export function threadStateSignature(values: AgentThreadState | null | undefined
   });
 }
 
+export const STREAM_RENDER_COALESCE_MS = 80;
+
+export type CoalesceDecision =
+  | { action: "flush-now" }
+  | { action: "schedule"; delayMs: number }
+  | { action: "wait" };
+
+export function decideCoalesce(
+  nowMs: number,
+  lastFlushMs: number,
+  intervalMs: number,
+  hasPendingTimer: boolean,
+): CoalesceDecision {
+  if (nowMs - lastFlushMs >= intervalMs) {
+    return { action: "flush-now" };
+  }
+  if (hasPendingTimer) {
+    return { action: "wait" };
+  }
+  return { action: "schedule", delayMs: intervalMs - (nowMs - lastFlushMs) };
+}
+
+function sameMessageArray(a: Message[], b: Message[]): boolean {
+  return (
+    a === b ||
+    (a.length === b.length && a.every((message, index) => message === b[index]))
+  );
+}
+
+/** Limit render-facing stream snapshots while keeping lifecycle state live. */
+export function useCoalescedStreamMessages(
+  messages: Message[],
+  isStreaming: boolean,
+  intervalMs: number = STREAM_RENDER_COALESCE_MS,
+): Message[] {
+  const [snapshot, setSnapshot] = useState<Message[] | null>(null);
+  const latestRef = useRef(messages);
+  latestRef.current = messages;
+  const lastFlushRef = useRef(Number.NEGATIVE_INFINITY);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const publish = useCallback(() => {
+    setSnapshot((previous) =>
+      previous !== null && sameMessageArray(previous, latestRef.current)
+        ? previous
+        : latestRef.current,
+    );
+  }, []);
+
+  const clearPendingFlush = useCallback(() => {
+    if (timerRef.current !== null) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!isStreaming) {
+      clearPendingFlush();
+      lastFlushRef.current = Number.NEGATIVE_INFINITY;
+      setSnapshot((previous) => (previous === null ? previous : null));
+      return;
+    }
+
+    const now = performance.now();
+    const decision = decideCoalesce(
+      now,
+      lastFlushRef.current,
+      intervalMs,
+      timerRef.current !== null,
+    );
+    if (decision.action === "flush-now") {
+      clearPendingFlush();
+      lastFlushRef.current = now;
+      publish();
+    } else if (decision.action === "schedule") {
+      timerRef.current = setTimeout(() => {
+        timerRef.current = null;
+        lastFlushRef.current = performance.now();
+        publish();
+      }, decision.delayMs);
+    }
+  }, [messages, isStreaming, intervalMs, publish, clearPendingFlush]);
+
+  useEffect(
+    () => () => {
+      if (timerRef.current !== null) {
+        clearTimeout(timerRef.current);
+      }
+    },
+    [],
+  );
+
+  return isStreaming && snapshot !== null ? snapshot : messages;
+}
+
 function getToolEventInput(data: unknown): Record<string, unknown> {
   if (typeof data === "object" && data !== null) {
     const input = Reflect.get(data, "input");
@@ -319,6 +415,7 @@ export function useThreadStream({
     threadId: onStreamThreadId,
     reconnectOnMount: true,
     fetchStateHistory: { limit: 1 },
+    throttle: true,
     onCreated(meta) {
       handleStreamStart(meta.thread_id, meta.run_id);
       setCurrentRunId(meta.run_id);
@@ -556,6 +653,15 @@ export function useThreadStream({
     null,
   );
 
+  const liveMessages =
+    polledValues !== null && Array.isArray(polledValues.messages)
+      ? polledValues.messages
+      : thread.messages;
+  const renderedMessages = useCoalescedStreamMessages(
+    liveMessages,
+    thread.isLoading,
+  );
+
   useEffect(() => {
     if (thread.isLoading) {
       setIsSubmitting(false);
@@ -628,16 +734,11 @@ export function useThreadStream({
     }
   }, [thread.messages.length, optimisticMessages.length]);
 
-  const snapshotThread =
-    polledValues === null
-      ? thread
-      : ({
-          ...thread,
-          values: polledValues,
-          messages: Array.isArray(polledValues.messages)
-            ? polledValues.messages
-            : thread.messages,
-        } as typeof thread);
+  const snapshotThread = {
+    ...thread,
+    ...(polledValues === null ? {} : { values: polledValues }),
+    messages: renderedMessages,
+  } as typeof thread;
 
   const sendMessage = useCallback(
     async (
