@@ -6,7 +6,7 @@ from typing import Any, override
 
 from langchain.agents import AgentState
 from langchain.agents.middleware import AgentMiddleware
-from langchain_core.messages import ToolMessage
+from langchain_core.messages import AIMessage, ToolMessage
 from langgraph.graph import END
 from langgraph.prebuilt.tool_node import ToolCallRequest
 from langgraph.types import Command
@@ -89,6 +89,59 @@ class ClarificationMiddleware(AgentMiddleware[ClarificationMiddlewareState]):
     """
 
     state_schema = ClarificationMiddlewareState
+
+    @staticmethod
+    def _filter_tool_use_content(content: Any, kept_ids: set[str], kept_names: set[str]) -> Any:
+        """Remove provider content blocks for tool calls dropped from the AI message."""
+        if not isinstance(content, list):
+            return content
+        filtered: list[Any] = []
+        for block in content:
+            if isinstance(block, dict) and block.get("type") in {"tool_use", "function_call"}:
+                block_id = block.get("id")
+                if isinstance(block_id, str) and block_id:
+                    if block_id not in kept_ids:
+                        continue
+                elif block.get("type") == "function_call":
+                    name = block.get("name")
+                    if not isinstance(name, str) or name not in kept_names:
+                        continue
+            filtered.append(block)
+        return filtered
+
+    def _drop_parallel_siblings(self, state: ClarificationMiddlewareState, runtime: Any) -> dict[str, Any] | None:
+        """Keep clarification calls from executing alongside unrelated tools."""
+        context = getattr(runtime, "context", None)
+        if isinstance(context, dict) and context.get("disable_clarification"):
+            return None
+
+        messages = state.get("messages", [])
+        if not messages or not isinstance(messages[-1], AIMessage):
+            return None
+        last = messages[-1]
+        tool_calls = list(last.tool_calls or [])
+        clarification_calls = [
+            call for call in tool_calls if call.get("name") == "ask_clarification"
+        ]
+        sibling_calls = [
+            call for call in tool_calls if call.get("name") != "ask_clarification"
+        ]
+        if not clarification_calls or not sibling_calls:
+            return None
+
+        kept_ids = {
+            str(call["id"])
+            for call in clarification_calls
+            if isinstance(call.get("id"), str) and call["id"]
+        }
+        kept_names = {
+            str(call["name"])
+            for call in clarification_calls
+            if isinstance(call.get("name"), str) and call["name"]
+        }
+        content = self._filter_tool_use_content(last.content, kept_ids, kept_names)
+        patched = last.model_copy(update={"tool_calls": clarification_calls, "content": content})
+        return {"messages": [patched]}
 
     def _is_chinese(self, text: str) -> bool:
         """Check if text contains Chinese characters.
@@ -261,3 +314,11 @@ class ClarificationMiddleware(AgentMiddleware[ClarificationMiddlewareState]):
             return await handler(request)
 
         return self._handle_clarification(request)
+
+    @override
+    def after_model(self, state: ClarificationMiddlewareState, runtime: Any) -> dict[str, Any] | None:
+        return self._drop_parallel_siblings(state, runtime)
+
+    @override
+    async def aafter_model(self, state: ClarificationMiddlewareState, runtime: Any) -> dict[str, Any] | None:
+        return self._drop_parallel_siblings(state, runtime)

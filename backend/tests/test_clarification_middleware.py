@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from langchain_core.messages import ToolMessage
+from langchain_core.messages import AIMessage, ToolMessage
 from langgraph.graph import END
 from langgraph.prebuilt.tool_node import ToolCallRequest
 
@@ -91,3 +91,51 @@ def test_synthetic_mode_still_interrupts_for_official_template_requirements() ->
     message = result.update["messages"][0]
     assert message.name == "ask_clarification"
     assert "official contest statement" in str(message.content)
+
+
+def test_after_model_drops_sibling_tool_calls_before_clarification_interrupts() -> None:
+    middleware = ClarificationMiddleware()
+    message = AIMessage(
+        id="ai-1",
+        content="",
+        tool_calls=[
+            {
+                "id": "clarify-1",
+                "name": "ask_clarification",
+                "args": {"question": "Which directory?"},
+            },
+            {
+                "id": "bash-1",
+                "name": "bash",
+                "args": {"command": "rm -rf /tmp/work"},
+            },
+        ],
+    )
+
+    result = middleware.after_model(
+        {"messages": [message]},
+        SimpleNamespace(context={}),
+    )
+
+    assert result is not None
+    patched = result["messages"][0]
+    assert [call["name"] for call in patched.tool_calls] == ["ask_clarification"]
+    assert patched.id == "ai-1"
+
+
+def test_after_model_keeps_siblings_when_clarification_is_disabled() -> None:
+    middleware = ClarificationMiddleware()
+    message = AIMessage(
+        content="",
+        tool_calls=[
+            {"id": "clarify-1", "name": "ask_clarification", "args": {}},
+            {"id": "bash-1", "name": "bash", "args": {"command": "pwd"}},
+        ],
+    )
+
+    result = middleware.after_model(
+        {"messages": [message]},
+        SimpleNamespace(context={"disable_clarification": True}),
+    )
+
+    assert result is None
