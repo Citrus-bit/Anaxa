@@ -256,9 +256,17 @@ http://localhost:6200
 
 如果你不想在本机安装 Python/Node/nginx，可以使用 Docker 开发模式：
 
+需要 Docker Compose `v2.24+`。`make docker-start` 会检查 Compose 版本、补齐缺失的 `.env` 文件，并从 `docker/` 目录使用相对 compose 文件名；`make docker-stop`、`make docker-logs` 和重启操作不会修改配置文件。
+
 ```bash
 make docker-init
 make docker-start
+```
+
+直接调用 Compose 时，请从仓库根目录执行并设置宿主机路径变量，避免 provisioner 模式把宿主机目录解析到错误位置：
+
+```bash
+MEDRIX_FLOW_ROOT="$PWD" docker compose -f docker/docker-compose-dev.yaml up --build
 ```
 
 访问地址同样是：

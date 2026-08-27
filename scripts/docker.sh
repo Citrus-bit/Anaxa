@@ -12,8 +12,110 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 DOCKER_DIR="$PROJECT_ROOT/docker"
 
-# Docker Compose command with project name
-COMPOSE_CMD="docker compose -p medrix-flow-dev -f docker-compose-dev.yaml"
+# Compose is always invoked from DOCKER_DIR, so keep the filename relative.
+COMPOSE_FILE="docker-compose-dev.yaml"
+COMPOSE_BIN=(docker compose)
+COMPOSE_MIN_VERSION="2.24.0"
+
+refresh_compose_cmd() {
+    COMPOSE_CMD="${COMPOSE_BIN[*]} -p medrix-flow-dev -f ${COMPOSE_FILE}"
+}
+
+refresh_compose_cmd
+
+ensure_from_example() {
+    local destination="$1"
+    local example="$2"
+    local label="$3"
+
+    if [ -f "$destination" ]; then
+        return 0
+    fi
+    if [ -f "$example" ]; then
+        cp "$example" "$destination"
+        echo -e "${BLUE}Created ${label} from $(basename "$example")${NC}"
+        return 0
+    fi
+    echo -e "${YELLOW}✗ ${label} not found and no $(basename "$example") to copy from.${NC}"
+    echo "Create $destination before starting Docker."
+    exit 1
+}
+
+require_compose_file() {
+    if [ -f "$DOCKER_DIR/$COMPOSE_FILE" ]; then
+        return 0
+    fi
+    echo -e "${YELLOW}✗ ${COMPOSE_FILE} not found at $DOCKER_DIR/${COMPOSE_FILE}${NC}"
+    echo "Run this from the Anaxa repository root, e.g. 'make docker-start'."
+    exit 1
+}
+
+probe_compose() {
+    local output
+
+    output="$(docker compose version --short 2>/dev/null || true)"
+    if [ -n "$output" ]; then
+        COMPOSE_BIN=(docker compose)
+        COMPOSE_VERSION_RAW="$output"
+        refresh_compose_cmd
+        return 0
+    fi
+    output="$(docker-compose version --short 2>/dev/null || true)"
+    if [ -n "$output" ]; then
+        COMPOSE_BIN=(docker-compose)
+        COMPOSE_VERSION_RAW="$output"
+        refresh_compose_cmd
+        return 0
+    fi
+    COMPOSE_VERSION_RAW=""
+    return 1
+}
+
+require_compose_version() {
+    local raw major minor min_major min_minor
+
+    min_major="${COMPOSE_MIN_VERSION%%.*}"
+    min_minor="${COMPOSE_MIN_VERSION#*.}"
+    min_minor="${min_minor%%.*}"
+    COMPOSE_VERSION_RAW=""
+    probe_compose || true
+    raw="${COMPOSE_VERSION_RAW#v}"
+    major="${raw%%.*}"
+    minor="${raw#*.}"
+    minor="${minor%%.*}"
+    major="${major//[!0-9]/}"
+    minor="${minor//[!0-9]/}"
+
+    if [ -z "$major" ] || [ -z "$minor" ]; then
+        echo -e "${YELLOW}⚠ Could not determine the Docker Compose version; ${COMPOSE_MIN_VERSION} or newer is recommended.${NC}"
+        return 0
+    fi
+    if [ "$major" -gt "$min_major" ] || { [ "$major" -eq "$min_major" ] && [ "$minor" -ge "$min_minor" ]; }; then
+        return 0
+    fi
+    echo -e "${YELLOW}✗ Docker Compose ${raw} is too old — ${COMPOSE_MIN_VERSION} or newer is required.${NC}"
+    echo "The development compose file uses optional env_file entries unsupported by older clients."
+    echo "Update Docker Desktop, or install a current Compose v2 plugin:"
+    echo "  https://docs.docker.com/compose/install/"
+    exit 1
+}
+
+ensure_medrix_flow_root() {
+    if [ -z "$MEDRIX_FLOW_ROOT" ]; then
+        export MEDRIX_FLOW_ROOT="$PROJECT_ROOT"
+    fi
+}
+
+compose_preflight() {
+    require_compose_file
+    require_compose_version
+    ensure_medrix_flow_root
+}
+
+ensure_env_files() {
+    ensure_from_example "$PROJECT_ROOT/.env" "$PROJECT_ROOT/.env.example" ".env"
+    ensure_from_example "$PROJECT_ROOT/frontend/.env" "$PROJECT_ROOT/frontend/.env.example" "frontend/.env"
+}
 
 detect_sandbox_mode() {
     local config_file="$PROJECT_ROOT/config.yaml"
@@ -157,6 +259,9 @@ start() {
     echo "=========================================="
     echo ""
 
+    compose_preflight
+    ensure_env_files
+
     sandbox_mode="$(detect_sandbox_mode)"
 
     if [ "$sandbox_mode" = "provisioner" ]; then
@@ -173,12 +278,8 @@ start() {
     fi
     echo ""
     
-    # Set MEDRIX_FLOW_ROOT for provisioner if not already set
-    if [ -z "$MEDRIX_FLOW_ROOT" ]; then
-        export MEDRIX_FLOW_ROOT="$PROJECT_ROOT"
-        echo -e "${BLUE}Setting MEDRIX_FLOW_ROOT=$MEDRIX_FLOW_ROOT${NC}"
-        echo ""
-    fi
+    echo -e "${BLUE}Using MEDRIX_FLOW_ROOT=$MEDRIX_FLOW_ROOT${NC}"
+    echo ""
     
     # Ensure config.yaml exists before starting.
     if [ ! -f "$PROJECT_ROOT/config.yaml" ]; then
@@ -260,6 +361,7 @@ logs() {
             ;;
     esac
     
+    compose_preflight
     cd "$DOCKER_DIR" && $COMPOSE_CMD logs -f $service
 }
 
@@ -267,9 +369,7 @@ logs() {
 stop() {
     # MEDRIX_FLOW_ROOT is referenced in docker-compose-dev.yaml; set it before
     # running compose down to suppress "variable is not set" warnings.
-    if [ -z "$MEDRIX_FLOW_ROOT" ]; then
-        export MEDRIX_FLOW_ROOT="$PROJECT_ROOT"
-    fi
+    compose_preflight
     echo "Stopping Docker development services..."
     cd "$DOCKER_DIR" && $COMPOSE_CMD down
     echo "Cleaning up sandbox containers..."
@@ -283,6 +383,7 @@ restart() {
     echo "  Restarting MedrixFlow Docker Services"
     echo "========================================"
     echo ""
+    compose_preflight
     echo -e "${BLUE}Restarting containers...${NC}"
     cd "$DOCKER_DIR" && $COMPOSE_CMD restart
     echo ""

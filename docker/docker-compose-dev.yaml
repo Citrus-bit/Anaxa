@@ -1,5 +1,7 @@
 # MedrixFlow Development Environment
-# Usage: docker-compose -f docker-compose-dev.yaml up --build
+# Requires Docker Compose >= 2.24. The optional env_file form prevents a fresh
+# checkout without local secrets from failing during Compose parsing.
+# Usage from the repository root: docker compose -f docker/docker-compose-dev.yaml up --build
 #
 # Services:
 #   - nginx: Reverse proxy (port 6200)
@@ -42,7 +44,8 @@ services:
       # which is unreachable from inside the container
       - K8S_API_SERVER=https://host.docker.internal:26443
     env_file:
-      - ../.env
+      - path: ../.env
+        required: false
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
@@ -99,7 +102,8 @@ services:
       - WATCHPACK_POLLING=true
       - CI=true
     env_file:
-      - ../frontend/.env
+      - path: ../frontend/.env
+        required: false
     networks:
       - medrix-flow-dev
     restart: unless-stopped
@@ -149,7 +153,8 @@ services:
       - MEDRIX_FLOW_HOST_SKILLS_PATH=${MEDRIX_FLOW_ROOT}/skills
       - MEDRIX_FLOW_SANDBOX_HOST=host.docker.internal
     env_file:
-      - ../.env
+      - path: ../.env
+        required: false
     extra_hosts:
       # For Linux: map host.docker.internal to host gateway
       - "host.docker.internal:host-gateway"
@@ -200,7 +205,8 @@ services:
       - MEDRIX_FLOW_HOST_SKILLS_PATH=${MEDRIX_FLOW_ROOT}/skills
       - MEDRIX_FLOW_SANDBOX_HOST=host.docker.internal
     env_file:
-      - ../.env
+      - path: ../.env
+        required: false
     extra_hosts:
       # For Linux: map host.docker.internal to host gateway
       - "host.docker.internal:host-gateway"
