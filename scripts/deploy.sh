@@ -194,8 +194,21 @@ echo ""
 echo "Building images and starting containers..."
 echo ""
 
+report_startup_failure() {
+    echo -e "${RED}✗ Anaxa services failed to become ready.${NC}" >&2
+    echo '  If Docker Compose reports "unknown flag: --wait", upgrade to a current Compose v2.' >&2
+    echo "  Container status:" >&2
+    "${COMPOSE_CMD[@]}" ps >&2 || true
+    echo "" >&2
+    echo "  Recent Gateway logs:" >&2
+    "${COMPOSE_CMD[@]}" logs --no-color --tail 100 gateway >&2 || true
+}
+
 # shellcheck disable=SC2086
-"${COMPOSE_CMD[@]}" $extra_args up --build -d --remove-orphans $services
+if ! "${COMPOSE_CMD[@]}" $extra_args up --build -d --remove-orphans --wait --wait-timeout 180 $services; then
+    report_startup_failure
+    exit 1
+fi
 
 echo ""
 echo "=========================================="

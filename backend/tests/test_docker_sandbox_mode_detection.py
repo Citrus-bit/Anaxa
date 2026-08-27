@@ -12,6 +12,8 @@ import yaml
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPT_PATH = REPO_ROOT / "scripts" / "docker.sh"
 COMPOSE_PATH = REPO_ROOT / "docker" / "docker-compose-dev.yaml"
+PROD_COMPOSE_PATH = REPO_ROOT / "docker" / "docker-compose.yaml"
+DEPLOY_PATH = REPO_ROOT / "scripts" / "deploy.sh"
 
 
 def _detect_mode_with_config(config_content: str) -> str:
@@ -211,3 +213,22 @@ def test_dev_compose_env_files_are_optional():
         assert compose["services"][service_name]["env_file"] == [
             {"path": path, "required": False}
         ]
+
+
+def test_production_gateway_has_http_healthcheck_and_nginx_waits_for_it():
+    compose = yaml.safe_load(PROD_COMPOSE_PATH.read_text(encoding="utf-8"))
+    gateway = compose["services"]["gateway"]
+    nginx = compose["services"]["nginx"]
+
+    assert gateway["healthcheck"]["test"][:3] == ["CMD", "python", "-c"]
+    assert "127.0.0.1:6202/health" in gateway["healthcheck"]["test"][3]
+    assert nginx["depends_on"]["gateway"] == {"condition": "service_healthy"}
+
+
+def test_production_deploy_waits_and_reports_failures():
+    deploy = DEPLOY_PATH.read_text(encoding="utf-8")
+
+    assert "--wait --wait-timeout 180" in deploy
+    assert "report_startup_failure" in deploy
+    assert 'logs --no-color --tail 100 gateway' in deploy
+    assert "Anaxa is running!" in deploy

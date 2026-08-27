@@ -275,6 +275,8 @@ MEDRIX_FLOW_ROOT="$PWD" docker compose -f docker/docker-compose-dev.yaml up --bu
 http://localhost:6200
 ```
 
+生产 Docker 启动会等待 Gateway `/health` 就绪后才报告成功；若服务未就绪，部署命令会返回失败并打印容器状态及最近的 Gateway 日志。
+
 停止 Docker 开发环境：
 
 ```bash
