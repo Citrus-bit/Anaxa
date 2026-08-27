@@ -70,7 +70,7 @@ services:
       context: ../
       dockerfile: backend/Dockerfile
     container_name: medrix-flow-gateway
-    command: sh -c "cd backend && PYTHONPATH=. uv run uvicorn app.gateway.app:app --host 0.0.0.0 --port 6202 --workers 2"
+    command: sh -c "cd backend && PYTHONPATH=. uv run --no-sync uvicorn app.gateway.app:app --host 0.0.0.0 --port 6202 --workers 2"
     volumes:
       - ${MEDRIX_FLOW_CONFIG_PATH}:/app/backend/config.yaml:ro
       - ${MEDRIX_FLOW_EXTENSIONS_CONFIG_PATH}:/app/backend/extensions_config.json:ro
@@ -125,7 +125,7 @@ services:
       context: ../
       dockerfile: backend/Dockerfile
     container_name: medrix-flow-langgraph
-    command: sh -c "cd /app/backend && uv run langgraph dev --no-browser --allow-blocking --no-reload --host 0.0.0.0 --port 6203"
+    command: sh -c "cd /app/backend && uv run --no-sync langgraph dev --no-browser --allow-blocking --no-reload --host 0.0.0.0 --port 6203"
     volumes:
       - ${MEDRIX_FLOW_CONFIG_PATH}:/app/config.yaml:ro
       - ${MEDRIX_FLOW_EXTENSIONS_CONFIG_PATH}:/app/extensions_config.json:ro

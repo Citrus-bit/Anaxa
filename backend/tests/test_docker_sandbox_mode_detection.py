@@ -232,3 +232,10 @@ def test_production_deploy_waits_and_reports_failures():
     assert "report_startup_failure" in deploy
     assert 'logs --no-color --tail 100 gateway' in deploy
     assert "Anaxa is running!" in deploy
+
+
+def test_production_runtime_uses_built_environment_without_syncing():
+    compose = PROD_COMPOSE_PATH.read_text(encoding="utf-8")
+
+    assert "PYTHONPATH=. uv run --no-sync uvicorn" in compose
+    assert "uv run --no-sync langgraph" in compose
