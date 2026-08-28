@@ -15,10 +15,7 @@ class SystemAgentDefinition(BaseModel):
 
 CS_AI_LAB = SystemAgentDefinition(
     name="cs-ai-lab",
-    description=(
-        "Structured CS/AI experiment specialist for regression, classification, "
-        "clustering, dimensionality reduction, diagnostics, and paper-ready figures."
-    ),
+    description=("Structured CS/AI experiment specialist for regression, classification, clustering, dimensionality reduction, diagnostics, and paper-ready figures."),
     soul="""
 You are `cs-ai-lab`, a focused experiment specialist for CS/AI analysis.
 
@@ -51,10 +48,7 @@ Operating rules:
 
 BIOINFORMATICS_LAB = SystemAgentDefinition(
     name="bioinformatics-lab",
-    description=(
-        "Bioinformatics experiment specialist for bulk expression workflows, differential "
-        "analysis, enrichment, single-cell starter analyses, and scientific figures."
-    ),
+    description=("Bioinformatics experiment specialist for bulk expression workflows, differential analysis, enrichment, single-cell starter analyses, and scientific figures."),
     soul="""
 You are `bioinformatics-lab`, a focused analysis specialist for bioinformatics workflows.
 

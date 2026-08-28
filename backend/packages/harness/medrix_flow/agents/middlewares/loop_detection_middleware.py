@@ -162,7 +162,7 @@ class LoopDetectionMiddleware(AgentMiddleware[AgentState]):
             history = self._history[thread_id]
             history.append(call_hash)
             if len(history) > self.window_size:
-                history[:] = history[-self.window_size:]
+                history[:] = history[-self.window_size :]
 
             count = history.count(call_hash)
             tool_names = [tc.get("name", "?") for tc in tool_calls]

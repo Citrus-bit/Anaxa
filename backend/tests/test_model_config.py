@@ -1,4 +1,7 @@
-from medrix_flow.config.model_config import ModelConfig
+import pytest
+from pydantic import ValidationError
+
+from deerflow.config.model_config import ModelConfig
 
 
 def _make_model(**overrides) -> ModelConfig:
@@ -28,3 +31,13 @@ def test_responses_api_fields_round_trip_in_model_dump():
 
     assert dumped["use_responses_api"] is True
     assert dumped["output_version"] == "responses/v1"
+
+
+def test_context_window_round_trips_when_positive():
+    assert _make_model(context_window=128_000).context_window == 128_000
+
+
+@pytest.mark.parametrize("context_window", [0, -1])
+def test_context_window_rejects_non_positive_capacity(context_window):
+    with pytest.raises(ValidationError, match="context_window"):
+        _make_model(context_window=context_window)

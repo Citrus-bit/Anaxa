@@ -1,6 +1,6 @@
 """Boundary check: harness layer must not import from app layer.
 
-The medrix-flow-harness package (packages/harness/medrix_flow/) is a standalone,
+The deerflow-harness package (packages/harness/deerflow/) is a standalone,
 publishable agent framework. It must never depend on the app layer (app/).
 
 This test scans all Python files in the harness package and fails if any
@@ -10,7 +10,7 @@ This test scans all Python files in the harness package and fails if any
 import ast
 from pathlib import Path
 
-HARNESS_ROOT = Path(__file__).parent.parent / "packages" / "harness" / "medrix_flow"
+HARNESS_ROOT = Path(__file__).parent.parent / "packages" / "harness" / "deerflow"
 
 BANNED_PREFIXES = ("app.",)
 

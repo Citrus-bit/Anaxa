@@ -78,10 +78,7 @@ def _academic_bib(total: int = 30) -> str:
 
 def _formal_chinese_review_tex(keys: list[str]) -> str:
     citations = ",".join(keys)
-    paragraphs = "\n\n".join(
-        rf"本文综述虚拟细胞基础模型中的图学习、扰动预测和多组学整合问题，并结合可验证文献讨论模型局限与改进方向 \citep{{{key}}}。"
-        for key in keys
-    )
+    paragraphs = "\n\n".join(rf"本文综述虚拟细胞基础模型中的图学习、扰动预测和多组学整合问题，并结合可验证文献讨论模型局限与改进方向 \citep{{{key}}}。" for key in keys)
     return rf"""
 \documentclass[UTF8,12pt]{{ctexart}}
 \usepackage{{natbib}}
@@ -124,10 +121,7 @@ def _long_math_modeling_tex() -> str:
     for index in range(80):
         paragraphs.append((sentence * 3) + rf"The claim is supported by \cite{{{cite_cycle[index % len(cite_cycle)]}}}.")
     figures = "\n".join(rf"\begin{{figure}}\caption{{Diagnostic figure {index}.}}\end{{figure}}" for index in range(1, 6))
-    tables = "\n".join(
-        rf"\begin{{table}}\caption{{Result table {index}.}}\begin{{tabular}}{{cc}}a&b\end{{tabular}}\end{{table}}"
-        for index in range(1, 6)
-    )
+    tables = "\n".join(rf"\begin{{table}}\caption{{Result table {index}.}}\begin{{tabular}}{{cc}}a&b\end{{tabular}}\end{{table}}" for index in range(1, 6))
     return rf"""
 \documentclass{{article}}
 \begin{{document}}

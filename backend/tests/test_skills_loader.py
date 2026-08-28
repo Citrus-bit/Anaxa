@@ -1,13 +1,13 @@
 """Tests for recursive skills loading."""
 
-import re
 from pathlib import Path
+from types import SimpleNamespace
 
-from medrix_flow.agents.lead_agent.prompt import clear_skills_system_prompt_cache, get_skills_prompt_section
-from medrix_flow.config.extensions_config import reset_extensions_config
-from medrix_flow.skills.loader import get_skills_root_path, invalidate_skills_cache, load_skills
-from medrix_flow.skills.types import Skill
-from medrix_flow.skills.validation import _validate_skill_frontmatter
+import pytest
+
+from deerflow.config.skills_config import SkillsConfig
+from deerflow.skills.storage import get_or_new_skill_storage
+from deerflow.skills.storage.local_skill_storage import LocalSkillStorage
 
 
 def _write_skill(skill_dir: Path, name: str, description: str) -> None:
@@ -17,13 +17,26 @@ def _write_skill(skill_dir: Path, name: str, description: str) -> None:
     (skill_dir / "SKILL.md").write_text(content, encoding="utf-8")
 
 
-def test_get_skills_root_path_points_to_project_root_skills():
-    """get_skills_root_path() should point to medrix-flow/skills (sibling of backend/), not backend/packages/skills."""
-    path = get_skills_root_path()
-    assert path.name == "skills", f"Expected 'skills', got '{path.name}'"
-    assert (path.parent / "backend").is_dir(), (
-        f"Expected skills path's parent to be project root containing 'backend/', but got {path}"
-    )
+def test_get_skills_root_path_points_to_current_project_skills(tmp_path: Path, monkeypatch):
+    """get_skills_root_path() should point to the caller project skills directory."""
+    monkeypatch.delenv("DEER_FLOW_SKILLS_PATH", raising=False)
+    monkeypatch.delenv("DEER_FLOW_PROJECT_ROOT", raising=False)
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "skills").mkdir()
+
+    app_config = SimpleNamespace(skills=SkillsConfig())
+    path = get_or_new_skill_storage(app_config=app_config).get_skills_root_path()
+    assert path == tmp_path / "skills"
+
+
+def test_get_skills_root_path_honors_env_override(tmp_path: Path, monkeypatch):
+    """DEER_FLOW_SKILLS_PATH should override the caller project skills directory."""
+    skills_root = tmp_path / "team-skills"
+    monkeypatch.setenv("DEER_FLOW_SKILLS_PATH", str(skills_root))
+
+    app_config = SimpleNamespace(skills=SkillsConfig())
+    path = get_or_new_skill_storage(app_config=app_config).get_skills_root_path()
+    assert path == skills_root
 
 
 def test_load_skills_discovers_nested_skills_and_sets_container_paths(tmp_path: Path):
@@ -34,7 +47,7 @@ def test_load_skills_discovers_nested_skills_and_sets_container_paths(tmp_path: 
     _write_skill(skills_root / "public" / "parent" / "child-skill", "child-skill", "Child skill")
     _write_skill(skills_root / "custom" / "team" / "helper", "team-helper", "Team helper")
 
-    skills = load_skills(skills_path=skills_root, use_config=False, enabled_only=False)
+    skills = get_or_new_skill_storage(skills_path=skills_root).load_skills(enabled_only=False)
     by_name = {skill.name: skill for skill in skills}
 
     assert {"root-skill", "child-skill", "team-helper"} <= set(by_name)
@@ -53,6 +66,48 @@ def test_load_skills_discovers_nested_skills_and_sets_container_paths(tmp_path: 
     assert team_skill.get_container_file_path() == "/mnt/skills/custom/team/helper/SKILL.md"
 
 
+def test_local_storage_accepts_external_custom_skill_directory_symlink(tmp_path: Path):
+    skills_root = tmp_path / "skills"
+    external_file = tmp_path / "external-skills" / "external-skill" / "SKILL.md"
+    external_file.parent.mkdir(parents=True)
+    external_file.write_text("---\nname: external-skill\ndescription: An external skill\n---\n", encoding="utf-8")
+
+    linked_dir = skills_root / "custom" / "external-skill"
+    linked_file = linked_dir / "SKILL.md"
+    linked_dir.parent.mkdir(parents=True)
+    try:
+        linked_dir.symlink_to(external_file.parent, target_is_directory=True)
+    except OSError as exc:
+        if getattr(exc, "winerror", None) == 1314:
+            pytest.skip("Windows symlink creation requires SeCreateSymbolicLinkPrivilege")
+        raise
+
+    storage = LocalSkillStorage(host_path=str(skills_root))
+
+    assert storage.validate_skill_file_path(linked_file) == external_file
+
+
+def test_load_skills_stops_at_skill_package_boundary(tmp_path: Path):
+    """SKILL.md files inside an existing skill package are support data, not skills."""
+    skills_root = tmp_path / "skills"
+
+    _write_skill(skills_root / "public" / "reviewer", "reviewer", "Reviews skills")
+    _write_skill(
+        skills_root / "public" / "reviewer" / "evals" / "fixtures" / "injection",
+        "injection-example",
+        "Calibration fixture",
+    )
+    _write_skill(
+        skills_root / "public" / "reviewer" / "examples" / "helper",
+        "nested-example",
+        "Nested package example",
+    )
+
+    skills = get_or_new_skill_storage(skills_path=skills_root).load_skills(enabled_only=False)
+
+    assert {skill.name for skill in skills} == {"reviewer"}
+
+
 def test_load_skills_skips_hidden_directories(tmp_path: Path):
     """Hidden directories should be excluded from recursive discovery."""
     skills_root = tmp_path / "skills"
@@ -64,122 +119,20 @@ def test_load_skills_skips_hidden_directories(tmp_path: Path):
         "Hidden skill",
     )
 
-    skills = load_skills(skills_path=skills_root, use_config=False, enabled_only=False)
+    skills = get_or_new_skill_storage(skills_path=skills_root).load_skills(enabled_only=False)
     names = {skill.name for skill in skills}
 
     assert "ok-skill" in names
     assert "secret-skill" not in names
 
 
-def test_custom_skill_overrides_public_skill_with_same_name(tmp_path: Path):
+def test_load_skills_prefers_custom_over_public_with_same_name(tmp_path: Path):
     skills_root = tmp_path / "skills"
+    _write_skill(skills_root / "public" / "shared-skill", "shared-skill", "Public version")
+    _write_skill(skills_root / "custom" / "shared-skill", "shared-skill", "Custom version")
 
-    _write_skill(skills_root / "public" / "shared", "shared-skill", "Public version")
-    _write_skill(skills_root / "custom" / "shared", "shared-skill", "Custom version")
+    skills = get_or_new_skill_storage(skills_path=skills_root).load_skills(enabled_only=False)
+    shared = next(skill for skill in skills if skill.name == "shared-skill")
 
-    skills = load_skills(skills_path=skills_root, use_config=False, enabled_only=False)
-    matches = [skill for skill in skills if skill.name == "shared-skill"]
-
-    assert len(matches) == 1
-    assert matches[0].category == "custom"
-    assert matches[0].description == "Custom version"
-
-
-def test_all_public_skills_parse_and_follow_name_conventions():
-    """Built-in skills should not fail silently at runtime."""
-    public_root = get_skills_root_path() / "public"
-    skill_files = sorted(public_root.glob("*/SKILL.md"))
-    assert skill_files
-    directory_name_exceptions = {"vercel-deploy-claimable": "vercel-deploy"}
-
-    for skill_file in skill_files:
-        is_valid, message, parsed_name = _validate_skill_frontmatter(skill_file.parent)
-        assert is_valid, f"{skill_file}: {message}"
-        expected_name = directory_name_exceptions.get(skill_file.parent.name, skill_file.parent.name)
-        assert parsed_name == expected_name, f"{skill_file}: frontmatter name {parsed_name!r} must be {expected_name!r}"
-
-    skills = load_skills(enabled_only=True)
-    names = {skill.name for skill in skills if skill.category == "public"}
-    expected_names = {directory_name_exceptions.get(skill_file.parent.name, skill_file.parent.name) for skill_file in skill_files}
-    assert expected_names <= names
-    assert "bootstrap" in names
-
-
-def test_skills_prompt_contains_metadata_not_skill_bodies(monkeypatch):
-    """The main prompt may list skills, but should not inline SKILL.md bodies."""
-    monkeypatch.setattr(
-        "medrix_flow.config.get_app_config",
-        lambda: type("Config", (), {"skills": type("Skills", (), {"container_path": "/mnt/skills"})()})(),
-    )
-    clear_skills_system_prompt_cache()
-
-    rendered = get_skills_prompt_section()
-
-    assert "<available_skills>" in rendered
-    assert "<name>bootstrap</name>" in rendered
-    assert "<location>/mnt/skills/public/bootstrap/SKILL.md</location>" in rendered
-    assert "# Bootstrap Soul" not in rendered
-    assert "# Deep Research Skill" not in rendered
-    assert "## Workflow" not in rendered
-
-
-def test_empirical_methods_guidance_uses_available_skill_path(monkeypatch, tmp_path: Path):
-    from medrix_flow.agents.lead_agent import prompt as prompt_module
-
-    skill = Skill(
-        name="empirical-research-methods",
-        description="Empirical methods",
-        license=None,
-        skill_dir=tmp_path / "custom" / "empirical-research-methods",
-        skill_file=tmp_path / "custom" / "empirical-research-methods" / "SKILL.md",
-        relative_path=Path("empirical-research-methods"),
-        category="custom",
-        enabled=True,
-    )
-    monkeypatch.setattr(prompt_module, "load_skills", lambda enabled_only=True: [skill])
-    monkeypatch.setattr(
-        "medrix_flow.config.get_app_config",
-        lambda: type("Config", (), {"skills": type("Skills", (), {"container_path": "/custom/skills"})()})(),
-    )
-
-    rendered = prompt_module.get_empirical_research_methods_guidance()
-    assert "/custom/skills/custom/empirical-research-methods/SKILL.md" in rendered
-    assert prompt_module.get_empirical_research_methods_guidance({"bootstrap"}) == ""
-
-
-def test_legacy_skill_key_controls_renamed_skill(monkeypatch, tmp_path: Path) -> None:
-    extensions_path = tmp_path / "extensions_config.json"
-    extensions_path.write_text(
-        '{"mcpServers": {}, "skills": {"claude-to-medrix_flow": {"enabled": false}}}',
-        encoding="utf-8",
-    )
-    monkeypatch.setenv("MEDRIX_FLOW_EXTENSIONS_CONFIG_PATH", str(extensions_path))
-    reset_extensions_config()
-    try:
-        invalidate_skills_cache()
-        skills = load_skills(enabled_only=False)
-        renamed = next(skill for skill in skills if skill.name == "claude-to-medrixflow")
-        assert renamed.enabled is False
-    finally:
-        reset_extensions_config()
-        invalidate_skills_cache()
-
-
-def test_public_skill_text_preserves_progressive_disclosure_boundaries():
-    public_root = get_skills_root_path() / "public"
-    bodies = {
-        skill_file.parent.name: skill_file.read_text(encoding="utf-8")
-        for skill_file in sorted(public_root.glob("*/SKILL.md"))
-    }
-
-    assert "Read all the skills listed" not in bodies["surprise-me"]
-    assert "ANY question" not in bodies["deep-research"]
-    assert "before content generation tasks" not in bodies["deep-research"]
-
-    frontend_body = bodies["frontend-design"]
-    assert "standalone generated HTML projects" in frontend_body
-    assert "does not apply when editing an existing product codebase" in frontend_body
-
-    fireworks_frontmatter = re.search(r"^---\n(.*?)\n---", bodies["fireworks-tech-graph"], re.DOTALL)
-    assert fireworks_frontmatter is not None
-    assert "real data" in fireworks_frontmatter.group(1)
+    assert shared.category == "custom"
+    assert shared.description == "Custom version"

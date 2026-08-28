@@ -511,6 +511,7 @@ class SubagentExecutor:
             result_holder = result
 
             try:
+
                 def execute_started_task() -> SubagentResult:
                     nonlocal result_holder
 

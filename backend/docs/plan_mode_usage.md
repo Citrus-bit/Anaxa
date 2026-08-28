@@ -1,6 +1,6 @@
 # Plan Mode with TodoList Middleware
 
-This document describes how to enable and use the Plan Mode feature with TodoList middleware in MedrixFlow 2.0.
+This document describes how to enable and use the Plan Mode feature with TodoList middleware in DeerFlow 2.0.
 
 ## Overview
 
@@ -19,7 +19,7 @@ Plan mode is controlled via **runtime configuration** through the `is_plan_mode`
 
 ```python
 from langchain_core.runnables import RunnableConfig
-from medrix_flow.agents.lead_agent.agent import make_lead_agent
+from deerflow.agents.lead_agent.agent import make_lead_agent
 
 # Enable plan mode via runtime configuration
 config = RunnableConfig(
@@ -72,7 +72,7 @@ The agent will skip using the todo list for:
 
 ```python
 from langchain_core.runnables import RunnableConfig
-from medrix_flow.agents.lead_agent.agent import make_lead_agent
+from deerflow.agents.lead_agent.agent import make_lead_agent
 
 # Create agent with plan mode ENABLED
 config_with_plan_mode = RunnableConfig(
@@ -101,7 +101,7 @@ You can enable/disable plan mode dynamically for different conversations or task
 
 ```python
 from langchain_core.runnables import RunnableConfig
-from medrix_flow.agents.lead_agent.agent import make_lead_agent
+from deerflow.agents.lead_agent.agent import make_lead_agent
 
 def create_agent_for_task(task_complexity: str):
     """Create agent with plan mode based on task complexity."""
@@ -127,8 +127,8 @@ complex_agent = create_agent_for_task("high")
 ## How It Works
 
 1. When `make_lead_agent(config)` is called, it extracts `is_plan_mode` from `config.configurable`
-2. The config is passed to `_build_middlewares(config)`
-3. `_build_middlewares()` reads `is_plan_mode` and calls `_create_todo_list_middleware(is_plan_mode)`
+2. The config is passed to `build_middlewares(config)`
+3. `build_middlewares()` reads `is_plan_mode` and calls `_create_todo_list_middleware(is_plan_mode)`
 4. If `is_plan_mode=True`, a `TodoListMiddleware` instance is created and added to the middleware chain
 5. The middleware automatically adds a `write_todos` tool to the agent's toolset
 6. The agent can use this tool to manage tasks during execution
@@ -141,7 +141,7 @@ make_lead_agent(config)
   │
   ├─> Extracts: is_plan_mode = config.configurable.get("is_plan_mode", False)
   │
-  └─> _build_middlewares(config)
+  └─> build_middlewares(config)
         │
         ├─> ThreadDataMiddleware
         ├─> SandboxMiddleware
@@ -154,9 +154,9 @@ make_lead_agent(config)
 ## Implementation Details
 
 ### Agent Module
-- **Location**: `packages/harness/medrix_flow/agents/lead_agent/agent.py`
+- **Location**: `packages/harness/deerflow/agents/lead_agent/agent.py`
 - **Function**: `_create_todo_list_middleware(is_plan_mode: bool)` - Creates TodoListMiddleware if plan mode is enabled
-- **Function**: `_build_middlewares(config: RunnableConfig)` - Builds middleware chain based on runtime config
+- **Function**: `build_middlewares(config: RunnableConfig)` - Builds middleware chain based on runtime config
 - **Function**: `make_lead_agent(config: RunnableConfig)` - Creates agent with appropriate middlewares
 
 ### Runtime Configuration
@@ -179,10 +179,10 @@ config = RunnableConfig(
 
 ## Custom Prompts
 
-MedrixFlow uses custom `system_prompt` and `tool_description` for the TodoListMiddleware that match the overall MedrixFlow prompt style:
+DeerFlow uses custom `system_prompt` and `tool_description` for the TodoListMiddleware that match the overall DeerFlow prompt style:
 
 ### System Prompt Features
-- Uses XML tags (`<todo_list_system>`) for structure consistency with MedrixFlow's main prompt
+- Uses XML tags (`<todo_list_system>`) for structure consistency with DeerFlow's main prompt
 - Emphasizes CRITICAL rules and best practices
 - Clear "When to Use" vs "When NOT to Use" guidelines
 - Focuses on real-time updates and immediate task completion
@@ -194,11 +194,11 @@ MedrixFlow uses custom `system_prompt` and `tool_description` for the TodoListMi
 - Comprehensive best practices section
 - Task completion requirements to prevent premature marking
 
-The custom prompts are defined in `_create_todo_list_middleware()` in `/Users/hetao/workspace/medrix-flow/backend/packages/harness/medrix_flow/agents/lead_agent/agent.py:57`.
+The custom prompts are defined in `_create_todo_list_middleware()` in `/Users/hetao/workspace/deer-flow/backend/packages/harness/deerflow/agents/lead_agent/agent.py:57`.
 
 ## Notes
 
-- TodoList middleware uses LangChain's built-in `TodoListMiddleware` with **custom MedrixFlow-style prompts**
+- TodoList middleware uses LangChain's built-in `TodoListMiddleware` with **custom DeerFlow-style prompts**
 - Plan mode is **disabled by default** (`is_plan_mode=False`) to maintain backward compatibility
 - The middleware is positioned before `ClarificationMiddleware` to allow todo management during clarification flows
-- Custom prompts emphasize the same principles as MedrixFlow's main system prompt (clarity, action-oriented, critical rules)
+- Custom prompts emphasize the same principles as DeerFlow's main system prompt (clarity, action-oriented, critical rules)

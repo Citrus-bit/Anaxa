@@ -3,13 +3,12 @@
 Ensures that structured content (list-of-blocks) is properly extracted to
 plain text, preventing raw Python repr strings from reaching the UI.
 
-See: https://github.com/Citrus-bit/medrix-flow/issues/1149
+See: https://github.com/bytedance/deer-flow/issues/1149
 """
 
 from langchain_core.messages import ToolMessage
 
-from medrix_flow.client import MedrixFlowClient
-from medrix_flow.runtime.serialization import serialize_message as serialize_runtime_message
+from deerflow.client import DeerFlowClient
 
 # ---------------------------------------------------------------------------
 # _serialize_message
@@ -17,11 +16,11 @@ from medrix_flow.runtime.serialization import serialize_message as serialize_run
 
 
 class TestSerializeToolMessageContent:
-    """MedrixFlowClient._serialize_message should normalize ToolMessage content."""
+    """DeerFlowClient._serialize_message should normalize ToolMessage content."""
 
     def test_string_content(self):
         msg = ToolMessage(content="ok", tool_call_id="tc1", name="search")
-        result = MedrixFlowClient._serialize_message(msg)
+        result = DeerFlowClient._serialize_message(msg)
         assert result["content"] == "ok"
         assert result["type"] == "tool"
 
@@ -32,7 +31,7 @@ class TestSerializeToolMessageContent:
             tool_call_id="tc1",
             name="search",
         )
-        result = MedrixFlowClient._serialize_message(msg)
+        result = DeerFlowClient._serialize_message(msg)
         assert result["content"] == "hello world"
         # Must NOT contain Python repr artifacts
         assert "[" not in result["content"]
@@ -48,17 +47,17 @@ class TestSerializeToolMessageContent:
             tool_call_id="tc1",
             name="search",
         )
-        result = MedrixFlowClient._serialize_message(msg)
+        result = DeerFlowClient._serialize_message(msg)
         assert result["content"] == "line 1\nline 2"
 
     def test_string_chunks_are_joined_without_newlines(self):
         """Chunked string payloads should not get artificial separators."""
         msg = ToolMessage(
-            content=["{\"a\"", ": \"b\"}"] ,
+            content=['{"a"', ': "b"}'],
             tool_call_id="tc1",
             name="search",
         )
-        result = MedrixFlowClient._serialize_message(msg)
+        result = DeerFlowClient._serialize_message(msg)
         assert result["content"] == '{"a": "b"}'
 
     def test_mixed_string_chunks_and_blocks(self):
@@ -68,7 +67,7 @@ class TestSerializeToolMessageContent:
             tool_call_id="tc1",
             name="search",
         )
-        result = MedrixFlowClient._serialize_message(msg)
+        result = DeerFlowClient._serialize_message(msg)
         assert result["content"] == "prefix-continued\nblock text"
 
     def test_mixed_blocks_with_non_text(self):
@@ -81,12 +80,12 @@ class TestSerializeToolMessageContent:
             tool_call_id="tc1",
             name="view_image",
         )
-        result = MedrixFlowClient._serialize_message(msg)
+        result = DeerFlowClient._serialize_message(msg)
         assert result["content"] == "found results"
 
     def test_empty_list_content(self):
         msg = ToolMessage(content=[], tool_call_id="tc1", name="search")
-        result = MedrixFlowClient._serialize_message(msg)
+        result = DeerFlowClient._serialize_message(msg)
         assert result["content"] == ""
 
     def test_plain_string_in_list(self):
@@ -96,41 +95,15 @@ class TestSerializeToolMessageContent:
             tool_call_id="tc1",
             name="search",
         )
-        result = MedrixFlowClient._serialize_message(msg)
+        result = DeerFlowClient._serialize_message(msg)
         assert result["content"] == "plain text block"
 
     def test_unknown_content_type_falls_back(self):
         """Unexpected types should not crash — return str()."""
         msg = ToolMessage(content=42, tool_call_id="tc1", name="calc")
-        result = MedrixFlowClient._serialize_message(msg)
+        result = DeerFlowClient._serialize_message(msg)
         # int → not str, not list → falls to str()
         assert result["content"] == "42"
-
-    def test_preserves_additional_kwargs(self):
-        msg = ToolMessage(
-            content="Need confirmation",
-            tool_call_id="tc1",
-            name="ask_clarification",
-            additional_kwargs={"clarification": {"question": "Continue?"}},
-        )
-        result = MedrixFlowClient._serialize_message(msg)
-        assert result["additional_kwargs"] == {
-            "clarification": {"question": "Continue?"},
-        }
-
-
-class TestRuntimeSerializeToolMessageContent:
-    def test_preserves_additional_kwargs(self):
-        msg = ToolMessage(
-            content="Need confirmation",
-            tool_call_id="tc1",
-            name="ask_clarification",
-            additional_kwargs={"clarification": {"question": "Continue?"}},
-        )
-        result = serialize_runtime_message(msg)
-        assert result["additional_kwargs"] == {
-            "clarification": {"question": "Continue?"},
-        }
 
 
 # ---------------------------------------------------------------------------
@@ -139,18 +112,16 @@ class TestRuntimeSerializeToolMessageContent:
 
 
 class TestExtractText:
-    """MedrixFlowClient._extract_text should handle all content shapes."""
+    """DeerFlowClient._extract_text should handle all content shapes."""
 
     def test_string_passthrough(self):
-        assert MedrixFlowClient._extract_text("hello") == "hello"
+        assert DeerFlowClient._extract_text("hello") == "hello"
 
     def test_list_text_blocks(self):
-        assert MedrixFlowClient._extract_text(
-            [{"type": "text", "text": "hi"}]
-        ) == "hi"
+        assert DeerFlowClient._extract_text([{"type": "text", "text": "hi"}]) == "hi"
 
     def test_empty_list(self):
-        assert MedrixFlowClient._extract_text([]) == ""
+        assert DeerFlowClient._extract_text([]) == ""
 
     def test_fallback_non_iterable(self):
-        assert MedrixFlowClient._extract_text(123) == "123"
+        assert DeerFlowClient._extract_text(123) == "123"

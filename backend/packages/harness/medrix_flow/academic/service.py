@@ -623,13 +623,7 @@ class AcademicResearchService:
             return []
 
         papers: list[PaperRecord] = []
-        markdown_files = sorted(
-            [
-                path
-                for path in uploads_dir.iterdir()
-                if path.is_file() and path.suffix.lower() == ".md"
-            ]
-        )
+        markdown_files = sorted([path for path in uploads_dir.iterdir() if path.is_file() and path.suffix.lower() == ".md"])
         for path in markdown_files:
             try:
                 content = path.read_text(encoding="utf-8")
@@ -756,9 +750,7 @@ class AcademicResearchService:
         deliverable_type = self._normalize_deliverable_type(metadata.get("deliverable_type"))
         review_quality_profile = bool(metadata.get("review_quality_profile")) or deliverable_type in _REVIEW_DELIVERABLE_TYPES
         min_reference_count = int(metadata.get("min_reference_count") or (50 if review_quality_profile else 0))
-        target_reference_count = int(
-            metadata.get("target_reference_count") or (80 if review_quality_profile else max(min_reference_count, 24))
-        )
+        target_reference_count = int(metadata.get("target_reference_count") or (80 if review_quality_profile else max(min_reference_count, 24)))
         min_core_paper_count = int(metadata.get("min_core_paper_count") or (30 if review_quality_profile else 24))
         return {
             "review_quality_profile": review_quality_profile,
@@ -857,21 +849,9 @@ class AcademicResearchService:
             for paper in included_papers
             if self._paper_topic_fit(paper, topic_tokens, required_topics) < 0.08
         ]
-        quantitative_evidence = [
-            paper
-            for paper in included_papers
-            if self._paper_has_any_term(paper, _QUANTITATIVE_EVIDENCE_TERMS)
-        ]
-        missing_required_topics = [
-            topic
-            for topic in required_topics
-            if not any(topic.lower() in self._paper_text(paper).lower() for paper in included_papers)
-        ]
-        missing_evidence_types = [
-            evidence_type
-            for evidence_type in required_evidence_types
-            if not any(evidence_type.lower() in self._paper_text(paper).lower() for paper in included_papers)
-        ]
+        quantitative_evidence = [paper for paper in included_papers if self._paper_has_any_term(paper, _QUANTITATIVE_EVIDENCE_TERMS)]
+        missing_required_topics = [topic for topic in required_topics if not any(topic.lower() in self._paper_text(paper).lower() for paper in included_papers)]
+        missing_evidence_types = [evidence_type for evidence_type in required_evidence_types if not any(evidence_type.lower() in self._paper_text(paper).lower() for paper in included_papers)]
         recommended_queries: list[str] = []
         if included_count < targets["min_reference_count"]:
             recommended_queries.extend(
@@ -896,9 +876,7 @@ class AcademicResearchService:
         findings: list[str] = []
         if included_count < targets["min_reference_count"]:
             status = "block"
-            findings.append(
-                f"Usable references below target: {included_count}/{targets['min_reference_count']}."
-            )
+            findings.append(f"Usable references below target: {included_count}/{targets['min_reference_count']}.")
         if off_topic:
             status = "revise" if status == "pass" else status
             findings.append(f"{len(off_topic)} reference(s) have weak topic fit.")
@@ -1367,15 +1345,11 @@ class AcademicResearchService:
                 paper = paper_lookup.get(card.paper_id)
                 if paper is None:
                     continue
-                lines.append(
-                    f"- {paper.title} {_author_year_citation(paper)}: {card.summary}"
-                )
+                lines.append(f"- {paper.title} {_author_year_citation(paper)}: {card.summary}")
             if node.metadata.get("section_key") == "innovation":
                 lines.append("")
                 lines.append("### Candidate Innovation Directions")
-                lines.extend(
-                    self._render_innovation_directions(papers)
-                )
+                lines.extend(self._render_innovation_directions(papers))
             lines.append("")
 
         lines.append("## References")
@@ -1384,9 +1358,7 @@ class AcademicResearchService:
             if entry.included_in_final:
                 lines.append(f"- {entry.formatted_text}")
         lines.append("")
-        lines.append(
-            "Full export bundle: `report.md`, `references.md`, `references.bib`, `evidence_map.json`, and `retrieval_audit.json`."
-        )
+        lines.append("Full export bundle: `report.md`, `references.md`, `references.bib`, `evidence_map.json`, and `retrieval_audit.json`.")
         return "\n".join(lines).strip() + "\n"
 
     def _render_references(
@@ -1436,10 +1408,7 @@ class AcademicResearchService:
                 "dataset_benchmark": self._dataset_benchmark_evidence(project, papers),
                 "experiment": [],
             },
-            "claim_support_policy": (
-                "Manuscript experimental claims require dataset/benchmark or experiment artifact support. "
-                "Literature-only support should be labeled as background or hypothesis."
-            ),
+            "claim_support_policy": ("Manuscript experimental claims require dataset/benchmark or experiment artifact support. Literature-only support should be labeled as background or hypothesis."),
             "outline": [
                 {
                     "node_id": node.node_id,
@@ -1471,11 +1440,7 @@ class AcademicResearchService:
                 {
                     "paper_id": paper.paper_id,
                     "paper_title": paper.title,
-                    "evidence_terms": [
-                        term
-                        for term in ("dataset", "benchmark", "leaderboard", "baseline", "metric", "ablation")
-                        if term in text
-                    ],
+                    "evidence_terms": [term for term in ("dataset", "benchmark", "leaderboard", "baseline", "metric", "ablation") if term in text],
                     "source_url": paper.source_url,
                     "support_status": "literature_indicates_benchmark_or_dataset",
                 }
@@ -1500,21 +1465,13 @@ class AcademicResearchService:
         )
 
         if population_gap:
-            bullets.append(
-                f"- Research-object gap: extend the topic toward under-described populations or scenarios highlighted by **{population_gap.title}** {_author_year_citation(population_gap)}."
-            )
+            bullets.append(f"- Research-object gap: extend the topic toward under-described populations or scenarios highlighted by **{population_gap.title}** {_author_year_citation(population_gap)}.")
         if method_gap:
-            bullets.append(
-                f"- Method-combination gap: combine complementary methods observed in **{method_gap.title}** {_author_year_citation(method_gap)} to test whether mixed pipelines outperform single-route studies."
-            )
+            bullets.append(f"- Method-combination gap: combine complementary methods observed in **{method_gap.title}** {_author_year_citation(method_gap)} to test whether mixed pipelines outperform single-route studies.")
         if conflict_gap:
-            bullets.append(
-                f"- Conflicting-findings gap: resolve contradictory evidence surfaced in **{conflict_gap.title}** {_author_year_citation(conflict_gap)} with better-controlled replication or stratified analysis."
-            )
+            bullets.append(f"- Conflicting-findings gap: resolve contradictory evidence surfaced in **{conflict_gap.title}** {_author_year_citation(conflict_gap)} with better-controlled replication or stratified analysis.")
         if design_gap:
-            bullets.append(
-                f"- Dataset/design limitation: strengthen benchmarking, sampling, or external validation beyond the setup described in **{design_gap.title}** {_author_year_citation(design_gap)}."
-            )
+            bullets.append(f"- Dataset/design limitation: strengthen benchmarking, sampling, or external validation beyond the setup described in **{design_gap.title}** {_author_year_citation(design_gap)}.")
         if not bullets:
             bullets.append("- Research-object gap: extend the current evidence base toward less-studied populations, contexts, or datasets.")
             bullets.append("- Method-combination gap: compare hybrid approaches instead of single isolated methods.")
@@ -1551,12 +1508,7 @@ class AcademicResearchService:
 
     @staticmethod
     def _include_reference_in_export(paper: PaperRecord) -> bool:
-        return bool(
-            paper.title
-            and paper.provider
-            and paper.canonical_source
-            and (paper.doi or paper.source_url or paper.oa_url)
-        )
+        return bool(paper.title and paper.provider and paper.canonical_source and (paper.doi or paper.source_url or paper.oa_url))
 
     @staticmethod
     def _to_virtual_output(thread_id: str, path: Path) -> str:

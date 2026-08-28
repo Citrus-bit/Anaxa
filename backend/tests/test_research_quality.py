@@ -34,11 +34,7 @@ def test_research_quality_audit_detects_review_weaknesses():
             quest_id="rq-quality",
             section_key="intro",
             title="Introduction",
-            content=(
-                "Representation is not enough for reliable systems \\cite{smith2024}.\n\n"
-                "Representation is not enough, and all systems must support every workflow. "
-                "bibliography keys are synchronized."
-            ),
+            content=("Representation is not enough for reliable systems \\cite{smith2024}.\n\nRepresentation is not enough, and all systems must support every workflow. bibliography keys are synchronized."),
             claim_ids=["claim-1", "claim-2"],
             created_at="2026-05-10T00:00:00Z",
             updated_at="2026-05-10T00:00:00Z",

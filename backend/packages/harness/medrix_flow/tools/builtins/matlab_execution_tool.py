@@ -133,11 +133,7 @@ def matlab_execution_tool(
             ),
             encoding="utf-8",
         )
-        output_files = sorted(
-            path
-            for path in run_dir.rglob("*")
-            if path.is_file() and path.name != manifest_path.name
-        )
+        output_files = sorted(path for path in run_dir.rglob("*") if path.is_file() and path.name != manifest_path.name)
         manifest = {
             "status": status,
             "returncode": completed.returncode,

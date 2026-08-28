@@ -141,11 +141,7 @@ class ResearchQuestOrchestrator:
                 )
                 if result.blocked and result.required_gate is not None:
                     gate = result.required_gate
-                    if (
-                        gate.gate_type == "final_quality_repair"
-                        and quality_mode == "auto_repair"
-                        and repairs_used < repair_budget
-                    ):
+                    if gate.gate_type == "final_quality_repair" and quality_mode == "auto_repair" and repairs_used < repair_budget:
                         repairs_used += 1
                         await self._service.attempt_quality_repair(quest_id)
                         continue

@@ -109,11 +109,7 @@ def citation_audit_tool(
     except Exception as exc:
         return Command(update={"messages": [ToolMessage(f"Error: {exc}", tool_call_id=tool_call_id)]})
 
-    summary = (
-        f"{result.status.upper()}: citation audit wrote `{virtual_output}`. "
-        f"BibTeX keys: {len(result.citation_keys)}; cited keys: {len(result.cited_keys)}; "
-        f"missing keys: {len(result.missing_keys)}; nocite_all: {result.nocite_all}."
-    )
+    summary = f"{result.status.upper()}: citation audit wrote `{virtual_output}`. BibTeX keys: {len(result.citation_keys)}; cited keys: {len(result.cited_keys)}; missing keys: {len(result.missing_keys)}; nocite_all: {result.nocite_all}."
     if result.violations:
         summary += " Violations: " + " ".join(result.violations)
 

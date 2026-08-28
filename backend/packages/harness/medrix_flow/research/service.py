@@ -172,9 +172,7 @@ class ResearchQuestService:
                 " ".join(str(value).lower() for value in (metadata or {}).values()),
             ]
         )
-        return any(hint in haystack for hint in _EMPIRICAL_DOMAIN_HINTS) or bool(
-            self._infer_empirical_methods(topic, scope, objective, metadata)
-        )
+        return any(hint in haystack for hint in _EMPIRICAL_DOMAIN_HINTS) or bool(self._infer_empirical_methods(topic, scope, objective, metadata))
 
     def _infer_empirical_methods(
         self,
@@ -511,10 +509,7 @@ class ResearchQuestService:
             overlap_risk=risk,
             closest_papers=closest_papers,
             hypotheses=hypotheses,
-            minimum_experiment=str(
-                inputs.get("minimum_experiment")
-                or "Define one baseline, one ablation, fixed seeds, and a primary metric before execution."
-            ),
+            minimum_experiment=str(inputs.get("minimum_experiment") or "Define one baseline, one ablation, fixed seeds, and a primary metric before execution."),
             decision=decision,
             created_at=now_iso(),
         )
@@ -649,9 +644,7 @@ class ResearchQuestService:
             "branch_count": len(branches),
             "metric_keys": sorted(metrics),
             "artifact_count": len(artifacts),
-            "hypothesis_outcomes": [
-                self._evaluate_hypothesis(hypothesis, branches, metrics) for hypothesis in hypotheses
-            ],
+            "hypothesis_outcomes": [self._evaluate_hypothesis(hypothesis, branches, metrics) for hypothesis in hypotheses],
             "significance_summary": self._summarize_significance(metrics),
         }
 
@@ -688,9 +681,7 @@ class ResearchQuestService:
 
         concurrency = self._resolve_section_concurrency(quest, inputs)
         generated_contents: dict[str, str] = {}
-        sections_to_generate = [
-            payload for payload in normalized_sections if not payload["content"] and content_generator is not None
-        ]
+        sections_to_generate = [payload for payload in normalized_sections if not payload["content"] and content_generator is not None]
         if sections_to_generate and content_generator is not None:
             snapshot = await self.get_snapshot(quest.quest_id)
             semaphore = asyncio.Semaphore(concurrency)
@@ -895,9 +886,7 @@ class ResearchQuestService:
         quality = dict(quest.metadata.get("quality") or {})
         quality.update(inputs.get("quality") or {})
         min_reference_count = int(quality.get("min_reference_count") or inputs.get("min_reference_count") or 50)
-        min_cited_reference_count = int(
-            quality.get("min_cited_reference_count") or inputs.get("min_cited_reference_count") or 30
-        )
+        min_cited_reference_count = int(quality.get("min_cited_reference_count") or inputs.get("min_cited_reference_count") or 30)
         required_topics = inputs.get("required_topics") or quality.get("required_topics") or quest.metadata.get("required_topics") or []
         reference_count = inputs.get("reference_count") or quest.metadata.get("reference_count")
         cited_reference_count = inputs.get("cited_reference_count") or quest.metadata.get("cited_reference_count")
@@ -974,11 +963,7 @@ class ResearchQuestService:
                     quest_id=quest_id,
                     section_key="implementation_challenges_mitigations",
                     title="Implementation Challenges and Mitigations",
-                    content=(
-                        "Implementation challenges should be treated as first-class evidence targets. "
-                        "The next revision must bind each challenge to specific papers, benchmarks, "
-                        "datasets, or experiment artifacts before final release."
-                    ),
+                    content=("Implementation challenges should be treated as first-class evidence targets. The next revision must bind each challenge to specific papers, benchmarks, datasets, or experiment artifacts before final release."),
                     claim_ids=[item.claim_id for item in evidence],
                     artifact_paths=[],
                     status="draft-repair",
@@ -1273,11 +1258,7 @@ class ResearchQuestService:
                 base -= 0.2
             if profile == "evidence-quantitative" and not audit.metrics.get("quantitative_evidence_count"):
                 base -= 0.2
-            if profile == "writing-style" and (
-                audit.metrics.get("repeated_phrase_count", 0)
-                or audit.metrics.get("absolute_phrase_count", 0)
-                or audit.metrics.get("author_note_count", 0)
-            ):
+            if profile == "writing-style" and (audit.metrics.get("repeated_phrase_count", 0) or audit.metrics.get("absolute_phrase_count", 0) or audit.metrics.get("author_note_count", 0)):
                 base -= 0.2
         if profile == "devils-advocate":
             base -= 0.05

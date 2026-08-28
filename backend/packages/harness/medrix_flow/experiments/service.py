@@ -442,11 +442,7 @@ class ExperimentService:
                     "empirical_method": project.metadata.get("empirical_method"),
                     "methodology_skill": project.metadata.get("skill"),
                     "synthetic_data_mode": self._is_synthetic_mode(project.metadata),
-                    "simulation_evidence": (
-                        "simulation-derived"
-                        if self._is_synthetic_mode(project.metadata) and path.name in _SIMULATION_DERIVED_ARTIFACTS
-                        else None
-                    ),
+                    "simulation_evidence": ("simulation-derived" if self._is_synthetic_mode(project.metadata) and path.name in _SIMULATION_DERIVED_ARTIFACTS else None),
                 },
                 created_at=now_iso(),
             )
@@ -534,13 +530,10 @@ class ExperimentService:
             "run_id": run.run_id,
             "status": "recorded" if recorded_ablation_results else "not_recorded",
             "evidence_source": "simulation-derived" if synthetic_mode and recorded_ablation_results else "recorded",
-            "ablation_variables": experiment_contract["ablation_variables"]
-            or (["signal_strength", "noise_scale", "sample_size"] if synthetic_mode else []),
+            "ablation_variables": experiment_contract["ablation_variables"] or (["signal_strength", "noise_scale", "sample_size"] if synthetic_mode else []),
             "results": recorded_ablation_results,
             "manuscript_rule": (
-                "Synthetic-mode ablations are simulation-backed and must cite simulation assumptions."
-                if synthetic_mode
-                else "If no ablation result is recorded, write ablations as planned work or limitations, not completed evidence."
+                "Synthetic-mode ablations are simulation-backed and must cite simulation assumptions." if synthetic_mode else "If no ablation result is recorded, write ablations as planned work or limitations, not completed evidence."
             ),
         }
         robustness_results = {
@@ -548,8 +541,7 @@ class ExperimentService:
             "run_id": run.run_id,
             "status": "recorded" if recorded_robustness_results else "not_recorded",
             "evidence_source": "simulation-derived" if synthetic_mode and recorded_robustness_results else "recorded",
-            "checks": experiment_contract["robustness_checks"]
-            or (["seed_repeat", "noise_perturbation", "sample_size_stress"] if synthetic_mode else []),
+            "checks": experiment_contract["robustness_checks"] or (["seed_repeat", "noise_perturbation", "sample_size_stress"] if synthetic_mode else []),
             "results": recorded_robustness_results,
         }
         claim_support_matrix = self._claim_support_matrix(

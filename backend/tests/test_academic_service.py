@@ -359,10 +359,7 @@ def test_academic_service_reuses_passed_coverage_bundle(tmp_path, monkeypatch):
                         year=2025,
                         venue="Journal of Reusable Evidence",
                         doi="10.8300/reuse-1",
-                        abstract=(
-                            "A benchmark dataset paper with metric reporting, baseline comparison, "
-                            "ablation analysis, and external validation."
-                        ),
+                        abstract=("A benchmark dataset paper with metric reporting, baseline comparison, ablation analysis, and external validation."),
                     ).model_copy(update={"project_id": project_id, "paper_id": f"{project_id}:reuse-1"})
                 ]
 
@@ -422,10 +419,7 @@ def test_academic_service_reingests_when_reuse_signature_changes(tmp_path, monke
                         year=2025,
                         venue="Journal of Reusable Evidence",
                         doi="10.8300/signature-1",
-                        abstract=(
-                            "A benchmark dataset paper with metric reporting, baseline comparison, "
-                            "ablation analysis, and external validation."
-                        ),
+                        abstract=("A benchmark dataset paper with metric reporting, baseline comparison, ablation analysis, and external validation."),
                     ).model_copy(update={"project_id": project_id, "paper_id": f"{project_id}:signature-1"})
                 ]
 
@@ -580,10 +574,7 @@ def test_academic_service_coverage_auto_repair_can_fill_review_reference_gap(tmp
                         year=2024,
                         venue="Journal of Repair Evidence",
                         doi=f"10.8200/repair-{start + idx}",
-                        abstract=(
-                            "A benchmark dataset and empirical result for agent evaluation frameworks "
-                            "with metric reporting, baseline comparison, ablation, and external validation."
-                        ),
+                        abstract=("A benchmark dataset and empirical result for agent evaluation frameworks with metric reporting, baseline comparison, ablation, and external validation."),
                     ).model_copy(update={"project_id": project_id, "paper_id": f"{project_id}:repair-{start + idx}"})
                     for idx in range(count)
                 ]

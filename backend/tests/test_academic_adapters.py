@@ -158,9 +158,7 @@ def test_acl_anthology_adapter_filters_to_acl_family_results(monkeypatch):
                 "doi": "https://doi.org/10.18653/v1/2025.acl-long.1",
                 "authorships": [{"author": {"display_name": "Alice Smith"}}],
                 "cited_by_count": 12,
-                "primary_location": {
-                    "source": {"display_name": "Annual Meeting of the Association for Computational Linguistics"}
-                },
+                "primary_location": {"source": {"display_name": "Annual Meeting of the Association for Computational Linguistics"}},
                 "best_oa_location": {
                     "landing_page_url": "https://aclanthology.org/2025.acl-long.1/",
                     "pdf_url": "https://aclanthology.org/2025.acl-long.1.pdf",

@@ -63,20 +63,11 @@ class TestResult(BaseModel):
     message: str
 
 
-GOOGLE_SETTINGS_VALIDATION_SUCCESS_MESSAGE = (
-    "Google AI Studio model validation succeeded. "
-    "The configured model returned image content using a low-cost 1K validation request. "
-    "This does not guarantee 4K production output."
-)
-GOOGLE_SETTINGS_VALIDATION_NO_IMAGE_MESSAGE = (
-    "Google AI Studio model validation reached the provider, but no image content was returned."
-)
+GOOGLE_SETTINGS_VALIDATION_SUCCESS_MESSAGE = "Google AI Studio model validation succeeded. The configured model returned image content using a low-cost 1K validation request. This does not guarantee 4K production output."
+GOOGLE_SETTINGS_VALIDATION_NO_IMAGE_MESSAGE = "Google AI Studio model validation reached the provider, but no image content was returned."
 OPENAI_COMPATIBLE_TEST_TIMEOUT_SECONDS = 30
 OPENAI_COMPATIBLE_IMAGE_GENERATIONS_PATH = "/images/generations"
-OPENAI_COMPATIBLE_BASE_URL_HINT = (
-    "Use the API root path such as https://provider.example.com/v1; "
-    "MedrixFlow appends /images/generations."
-)
+OPENAI_COMPATIBLE_BASE_URL_HINT = "Use the API root path such as https://provider.example.com/v1; MedrixFlow appends /images/generations."
 
 
 def _trim_for_message(value: str, limit: int = 300) -> str:
@@ -121,10 +112,7 @@ def _openai_compatible_generations_url(base_url: str) -> str:
 
 def _openai_compatible_base_url_error(base_url: str) -> str | None:
     if base_url.rstrip("/").endswith(OPENAI_COMPATIBLE_IMAGE_GENERATIONS_PATH):
-        return (
-            "OpenAI-compatible image provider base URL must be the API root path, not the full "
-            f"{OPENAI_COMPATIBLE_IMAGE_GENERATIONS_PATH} endpoint. {OPENAI_COMPATIBLE_BASE_URL_HINT}"
-        )
+        return f"OpenAI-compatible image provider base URL must be the API root path, not the full {OPENAI_COMPATIBLE_IMAGE_GENERATIONS_PATH} endpoint. {OPENAI_COMPATIBLE_BASE_URL_HINT}"
     return None
 
 
@@ -138,19 +126,12 @@ def _parse_openai_compatible_json(response: requests.Response, endpoint: str) ->
             f"preview={_response_preview(response)}. {OPENAI_COMPATIBLE_BASE_URL_HINT}"
         )
     if not isinstance(payload, dict):
-        return None, (
-            f"OpenAI-compatible image provider at {endpoint} returned JSON that is not an object. "
-            f"preview={_json_preview(payload)}. {OPENAI_COMPATIBLE_BASE_URL_HINT}"
-        )
+        return None, (f"OpenAI-compatible image provider at {endpoint} returned JSON that is not an object. preview={_json_preview(payload)}. {OPENAI_COMPATIBLE_BASE_URL_HINT}")
     return payload, None
 
 
 def _format_openai_compatible_status_error(response: requests.Response, endpoint: str) -> str:
-    return (
-        f"OpenAI-compatible image provider at {endpoint} returned status {response.status_code}. "
-        f"content_type={_response_content_type(response)}; preview={_response_preview(response)}. "
-        f"{OPENAI_COMPATIBLE_BASE_URL_HINT}"
-    )
+    return f"OpenAI-compatible image provider at {endpoint} returned status {response.status_code}. content_type={_response_content_type(response)}; preview={_response_preview(response)}. {OPENAI_COMPATIBLE_BASE_URL_HINT}"
 
 
 # ---------------------------------------------------------------------------
@@ -368,18 +349,12 @@ async def test_image_provider(req: ImageProviderTestRequest) -> TestResult:
             except requests.exceptions.Timeout:
                 return TestResult(
                     success=False,
-                    message=(
-                        f"OpenAI-compatible image provider request to {endpoint} timed out after "
-                        f"{OPENAI_COMPATIBLE_TEST_TIMEOUT_SECONDS} seconds. {OPENAI_COMPATIBLE_BASE_URL_HINT}"
-                    ),
+                    message=(f"OpenAI-compatible image provider request to {endpoint} timed out after {OPENAI_COMPATIBLE_TEST_TIMEOUT_SECONDS} seconds. {OPENAI_COMPATIBLE_BASE_URL_HINT}"),
                 )
             except requests.exceptions.RequestException as exc:
                 return TestResult(
                     success=False,
-                    message=(
-                        f"OpenAI-compatible image provider request to {endpoint} failed before a response was "
-                        f"received: {exc}. {OPENAI_COMPATIBLE_BASE_URL_HINT}"
-                    ),
+                    message=(f"OpenAI-compatible image provider request to {endpoint} failed before a response was received: {exc}. {OPENAI_COMPATIBLE_BASE_URL_HINT}"),
                 )
             if resp.status_code != 200:
                 return TestResult(success=False, message=_format_openai_compatible_status_error(resp, endpoint))
@@ -393,11 +368,7 @@ async def test_image_provider(req: ImageProviderTestRequest) -> TestResult:
                 return TestResult(success=True, message="OpenAI-compatible image provider is valid for image generation.")
             return TestResult(
                 success=False,
-                message=(
-                    "OpenAI-compatible provider was accepted, but no image content was returned. "
-                    "Expected data[0].b64_json or data[0].url; "
-                    f"response_preview={_json_preview(payload)}."
-                ),
+                message=(f"OpenAI-compatible provider was accepted, but no image content was returned. Expected data[0].b64_json or data[0].url; response_preview={_json_preview(payload)}."),
             )
 
         return TestResult(success=False, message=f"Unknown image provider: {provider}")

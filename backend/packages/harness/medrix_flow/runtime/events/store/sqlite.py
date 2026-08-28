@@ -28,12 +28,8 @@ class SQLiteRunEventStore(RunEventStore):
                 )
                 """
             )
-            await self._db.conn.execute(
-                "CREATE INDEX IF NOT EXISTS idx_run_events_thread_seq ON run_events(thread_id, seq)"
-            )
-            await self._db.conn.execute(
-                "CREATE INDEX IF NOT EXISTS idx_run_events_thread_run_seq ON run_events(thread_id, run_id, seq)"
-            )
+            await self._db.conn.execute("CREATE INDEX IF NOT EXISTS idx_run_events_thread_seq ON run_events(thread_id, seq)")
+            await self._db.conn.execute("CREATE INDEX IF NOT EXISTS idx_run_events_thread_run_seq ON run_events(thread_id, run_id, seq)")
             await self._db.conn.commit()
 
     async def put(

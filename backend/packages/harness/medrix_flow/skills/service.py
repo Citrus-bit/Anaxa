@@ -39,11 +39,7 @@ class SkillService:
     def get_custom_skill(self, skill_name: str) -> tuple[Skill, str]:
         skill_name = self._sanitize_skill_name(skill_name)
         skill = next(
-            (
-                item
-                for item in self.list_custom_skills()
-                if item.name == skill_name
-            ),
+            (item for item in self.list_custom_skills() if item.name == skill_name),
             None,
         )
         if skill is None:
@@ -175,10 +171,7 @@ class SkillService:
         extensions_config.skills[skill_name] = SkillStateConfig(enabled=enabled)
 
         config_data = extensions_config.model_dump(by_alias=True)
-        config_data["skills"] = {
-            name: {"enabled": skill_config.enabled}
-            for name, skill_config in extensions_config.skills.items()
-        }
+        config_data["skills"] = {name: {"enabled": skill_config.enabled} for name, skill_config in extensions_config.skills.items()}
         self._atomic_write_json(config_path, config_data)
         reload_extensions_config()
         self._refresh_skill_caches()

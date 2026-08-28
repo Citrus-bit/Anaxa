@@ -21,9 +21,7 @@ class FakeCheckpointer:
         self.messages = list(messages or [])
 
     async def aget_tuple(self, config):
-        return SimpleNamespace(
-            checkpoint={"channel_values": {"messages": list(self.messages)}}
-        )
+        return SimpleNamespace(checkpoint={"channel_values": {"messages": list(self.messages)}})
 
 
 async def _make_runtime_service(messages=None) -> tuple[GatewayRunService, SQLiteRuntimeDB]:
@@ -622,9 +620,7 @@ def test_gateway_run_threads_reasoning_effort_into_embedded_client():
 
 def test_materialization_failures_are_best_effort():
     async def scenario():
-        service, db = await _make_runtime_service(
-            messages=[HumanMessage(content="before"), AIMessage(content="after")]
-        )
+        service, db = await _make_runtime_service(messages=[HumanMessage(content="before"), AIMessage(content="after")])
         await service.start_run(
             "thread-1",
             runs.RunCreateRequest(run_id="run-2", assistant_id="lead_agent"),
@@ -651,9 +647,7 @@ def test_materialization_failures_are_best_effort():
 
 
 def test_runs_router_and_feedback_end_to_end():
-    service, db = asyncio.run(
-        _make_runtime_service(messages=[HumanMessage(content="before")])
-    )
+    service, db = asyncio.run(_make_runtime_service(messages=[HumanMessage(content="before")]))
 
     app = FastAPI()
     app.state.run_service = service

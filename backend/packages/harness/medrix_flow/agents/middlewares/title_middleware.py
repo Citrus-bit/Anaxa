@@ -122,11 +122,7 @@ class TitleMiddleware(AgentMiddleware[TitleMiddlewareState]):
             candidate = line.strip().strip('"').strip("'").strip("`*_ ")
             candidate = _TITLE_INTRO_RE.sub("", candidate)
             candidate = _TITLE_LABEL_RE.sub("", candidate).strip().strip('"').strip("'")
-            if (
-                not candidate
-                or _PROMPT_ECHO_RE.search(candidate)
-                or _GENERIC_SUMMARY_TITLE_RE.search(candidate)
-            ):
+            if not candidate or _PROMPT_ECHO_RE.search(candidate) or _GENERIC_SUMMARY_TITLE_RE.search(candidate):
                 continue
             title = re.sub(r"\s+", " ", candidate).strip()
             break

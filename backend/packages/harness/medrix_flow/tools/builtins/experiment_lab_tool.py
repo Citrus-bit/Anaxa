@@ -98,11 +98,7 @@ async def experiment_lab_tool(
         return Command(update={"messages": [ToolMessage(f"Error: {exc}", tool_call_id=tool_call_id)]})
 
     try:
-        summary = (
-            f"Experiment project `{result.project.project_id}` completed. "
-            f"Run `{result.run.run_id}` produced {result.bundle.figure_count} figure(s) and "
-            f"{result.bundle.table_count} table(s)."
-        )
+        summary = f"Experiment project `{result.project.project_id}` completed. Run `{result.run.run_id}` produced {result.bundle.figure_count} figure(s) and {result.bundle.table_count} table(s)."
         return Command(
             update={
                 "artifacts": result.bundle.export_files,

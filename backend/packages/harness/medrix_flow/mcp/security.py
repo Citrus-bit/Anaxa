@@ -28,11 +28,7 @@ _BLOCKED_EVAL_FLAGS = {"--command", "--eval", "--print", "-c", "-e", "-p", "/c"}
 def get_allowed_mcp_commands() -> set[str]:
     """Return the effective MCP stdio command allowlist."""
 
-    extra = {
-        item.strip()
-        for item in os.getenv("MEDRIX_FLOW_ALLOWED_MCP_COMMANDS", "").split(",")
-        if item.strip()
-    }
+    extra = {item.strip() for item in os.getenv("MEDRIX_FLOW_ALLOWED_MCP_COMMANDS", "").split(",") if item.strip()}
     return {command.lower() for command in _DEFAULT_ALLOWED_MCP_COMMANDS | extra}
 
 
@@ -66,10 +62,7 @@ def validate_stdio_command(command: str, args: list[str] | None = None) -> None:
         raise ValueError(f"Command '{command}' is not allowed for MCP stdio servers.")
 
     if command_name not in get_allowed_mcp_commands():
-        raise ValueError(
-            f"Command '{command}' is not in the MCP allowlist. "
-            "Set MEDRIX_FLOW_ALLOWED_MCP_COMMANDS to extend the allowlist."
-        )
+        raise ValueError(f"Command '{command}' is not in the MCP allowlist. Set MEDRIX_FLOW_ALLOWED_MCP_COMMANDS to extend the allowlist.")
 
     blocked_flags = sorted(_BLOCKED_EVAL_FLAGS & set(args))
     if blocked_flags:

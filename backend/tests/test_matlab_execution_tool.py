@@ -35,9 +35,7 @@ def test_matlab_execution_requires_host_bash_permission(tmp_path, monkeypatch):
 def test_matlab_execution_runs_fake_batch_and_collects_outputs(tmp_path, monkeypatch):
     fake_matlab = tmp_path / "matlab"
     fake_matlab.write_text(
-        "#!/usr/bin/env bash\n"
-        "echo fake matlab \"$@\"\n"
-        "printf 'value\\n1\\n' > result.csv\n",
+        "#!/usr/bin/env bash\necho fake matlab \"$@\"\nprintf 'value\\n1\\n' > result.csv\n",
         encoding="utf-8",
     )
     fake_matlab.chmod(0o755)

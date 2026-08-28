@@ -1,6 +1,6 @@
 # Architecture Overview
 
-This document provides a comprehensive overview of the MedrixFlow backend architecture.
+This document provides a comprehensive overview of the DeerFlow backend architecture.
 
 ## System Architecture
 
@@ -14,30 +14,28 @@ This document provides a comprehensive overview of the MedrixFlow backend archit
 │                          Nginx (Port 2026)                               │
 │                    Unified Reverse Proxy Entry Point                      │
 │  ┌────────────────────────────────────────────────────────────────────┐  │
-│  │  /api/langgraph/*  →  LangGraph Server (2024)                      │  │
-│  │  /api/*            →  Gateway API (8001)                           │  │
+│  │  /api/langgraph/*  →  Gateway LangGraph-compatible runtime (8001)  │  │
+│  │  /api/*            →  Gateway REST APIs (8001)                     │  │
 │  │  /*                →  Frontend (3000)                               │  │
 │  └────────────────────────────────────────────────────────────────────┘  │
 └─────────────────────────────────┬────────────────────────────────────────┘
                                   │
-          ┌───────────────────────┼───────────────────────┐
-          │                       │                       │
-          ▼                       ▼                       ▼
-┌─────────────────────┐ ┌─────────────────────┐ ┌─────────────────────┐
-│   LangGraph Server  │ │    Gateway API      │ │     Frontend        │
-│     (Port 2024)     │ │    (Port 8001)      │ │    (Port 3000)      │
-│                     │ │                     │ │                     │
-│  - Agent Runtime    │ │  - Models API       │ │  - Next.js App      │
-│  - Thread Mgmt      │ │  - MCP Config       │ │  - React UI         │
-│  - SSE Streaming    │ │  - Skills Mgmt      │ │  - Chat Interface   │
-│  - Checkpointing    │ │  - File Uploads     │ │                     │
-│                     │ │  - Thread Cleanup   │ │                     │
-│                     │ │  - Artifacts        │ │                     │
-└─────────────────────┘ └─────────────────────┘ └─────────────────────┘
-          │                       │
-          │     ┌─────────────────┘
-          │     │
-          ▼     ▼
+          ┌───────────────────────┴───────────────────────┐
+          │                                               │
+          ▼                                               ▼
+┌─────────────────────────────────────────────┐ ┌─────────────────────┐
+│              Gateway API                    │ │     Frontend        │
+│              (Port 8001)                    │ │    (Port 3000)      │
+│                                             │ │                     │
+│  - LangGraph-compatible runs/threads API    │ │  - Next.js App      │
+│  - Embedded Agent Runtime                   │ │  - React UI         │
+│  - SSE Streaming                            │ │  - Chat Interface   │
+│  - Checkpointing                            │ │                     │
+│  - Models, MCP, Skills, Uploads, Artifacts  │ │                     │
+│  - Thread Cleanup                           │ │                     │
+└─────────────────────────────────────────────┘ └─────────────────────┘
+          │
+          ▼
 ┌──────────────────────────────────────────────────────────────────────────┐
 │                         Shared Configuration                              │
 │  ┌─────────────────────────┐  ┌────────────────────────────────────────┐ │
@@ -52,17 +50,11 @@ This document provides a comprehensive overview of the MedrixFlow backend archit
 
 ## Component Details
 
-## Current Product Notes
+### Gateway Embedded Agent Runtime
 
-- Clarification interrupts are structured: `ClarificationMiddleware` emits both the visible message and the metadata consumed by the frontend clarification card.
-- `.tex` artifact preview is part of the file-presentation flow: `present_files` attempts local PDF generation through `tectonic` before exposing the artifact.
-- Frontend chat modes are capability-driven: the UI maps `flash / pro / ultra` onto backend reasoning-effort context rather than exposing a separate raw effort control.
+The agent runtime is embedded in the FastAPI Gateway and built on LangGraph for robust multi-agent workflow orchestration. Nginx rewrites `/api/langgraph/*` to Gateway's native `/api/*` routes, so the public API remains compatible with LangGraph SDK clients without running a separate LangGraph server.
 
-### LangGraph Server
-
-The LangGraph server is the core agent runtime, built on LangGraph for robust multi-agent workflow orchestration.
-
-**Entry Point**: `packages/harness/medrix_flow/agents/lead_agent/agent.py:make_lead_agent`
+**Entry Point**: `packages/harness/deerflow/agents/lead_agent/agent.py:make_lead_agent`
 
 **Key Responsibilities**:
 - Agent creation and configuration
@@ -71,33 +63,35 @@ The LangGraph server is the core agent runtime, built on LangGraph for robust mu
 - Tool execution orchestration
 - SSE streaming for real-time responses
 
-**Configuration**: `langgraph.json`
+**Graph registry**: `langgraph.json` remains available for tooling, Studio, or direct LangGraph Server compatibility.
+It is not the default service entrypoint; scripts and Docker deployments run the Gateway embedded runtime.
 
 ```json
 {
   "agent": {
     "type": "agent",
-    "path": "medrix_flow.agents:make_lead_agent"
+    "path": "deerflow.agents:make_lead_agent"
   }
 }
 ```
 
 ### Gateway API
 
-FastAPI application providing REST endpoints for non-agent operations.
+FastAPI application providing REST endpoints plus the public LangGraph-compatible `/api/langgraph/*` runtime routes.
 
 **Entry Point**: `app/gateway/app.py`
 
 **Routers**:
 - `models.py` - `/api/models` - Model listing and details
+- `thread_runs.py` / `runs.py` - `/api/threads/{id}/runs`, `/api/runs/*` - LangGraph-compatible runs and streaming
 - `mcp.py` - `/api/mcp` - MCP server configuration
 - `skills.py` - `/api/skills` - Skills management
 - `uploads.py` - `/api/threads/{id}/uploads` - File upload
-- `threads.py` - `/api/threads/{id}` - Local MedrixFlow thread data cleanup after LangGraph deletion
+- `threads.py` - `/api/threads/{id}` - Local DeerFlow thread data cleanup after LangGraph deletion
 - `artifacts.py` - `/api/threads/{id}/artifacts` - Artifact serving
 - `suggestions.py` - `/api/threads/{id}/suggestions` - Follow-up suggestion generation
 
-The web conversation delete flow is now split across both backend surfaces: LangGraph handles `DELETE /api/langgraph/threads/{thread_id}` for thread state, then the Gateway `threads.py` router removes MedrixFlow-managed filesystem data via `Paths.delete_thread_dir()`.
+The web conversation delete flow first deletes Gateway-managed thread state through the LangGraph-compatible route, then the Gateway `threads.py` router removes DeerFlow-managed filesystem data via `Paths.delete_thread_dir()`.
 
 ### Agent Architecture
 
@@ -141,7 +135,7 @@ class ThreadState(AgentState):
     # Core state from AgentState
     messages: list[BaseMessage]
 
-    # MedrixFlow extensions
+    # DeerFlow extensions
     sandbox: dict             # Sandbox environment info
     artifacts: list[str]      # Generated file paths
     thread_data: dict         # {workspace, uploads, outputs} paths
@@ -169,7 +163,7 @@ class ThreadState(AgentState):
               ▼                                         ▼
 ┌─────────────────────────┐              ┌─────────────────────────┐
 │  LocalSandboxProvider   │              │  AioSandboxProvider     │
-│  (packages/harness/medrix_flow/sandbox/local.py) │              │  (packages/harness/medrix_flow/community/)       │
+│  (packages/harness/deerflow/sandbox/local.py) │              │  (packages/harness/deerflow/community/)       │
 │                         │              │                         │
 │  - Singleton instance   │              │  - Docker-based         │
 │  - Direct execution     │              │  - Isolated containers  │
@@ -189,10 +183,10 @@ class ThreadState(AgentState):
 
 | Virtual Path | Physical Path |
 |-------------|---------------|
-| `/mnt/user-data/workspace` | `backend/.medrix-flow/threads/{thread_id}/user-data/workspace` |
-| `/mnt/user-data/uploads` | `backend/.medrix-flow/threads/{thread_id}/user-data/uploads` |
-| `/mnt/user-data/outputs` | `backend/.medrix-flow/threads/{thread_id}/user-data/outputs` |
-| `/mnt/skills` | `medrix-flow/skills/` |
+| `/mnt/user-data/workspace` | `backend/.deer-flow/threads/{thread_id}/user-data/workspace` |
+| `/mnt/user-data/uploads` | `backend/.deer-flow/threads/{thread_id}/user-data/uploads` |
+| `/mnt/user-data/outputs` | `backend/.deer-flow/threads/{thread_id}/user-data/outputs` |
+| `/mnt/skills` | `deer-flow/skills/` |
 
 ### Tool System
 
@@ -203,9 +197,9 @@ class ThreadState(AgentState):
 
 ┌─────────────────────┐  ┌─────────────────────┐  ┌─────────────────────┐
 │   Built-in Tools    │  │  Configured Tools   │  │     MCP Tools       │
-│  (packages/harness/medrix_flow/tools/)       │  │  (config.yaml)      │  │  (extensions.json)  │
+│  (packages/harness/deerflow/tools/)       │  │  (config.yaml)      │  │  (extensions.json)  │
 ├─────────────────────┤  ├─────────────────────┤  ├─────────────────────┤
-│ - present_file      │  │ - web_search        │  │ - github            │
+│ - present_files     │  │ - web_search        │  │ - github            │
 │ - ask_clarification │  │ - web_fetch         │  │ - filesystem        │
 │ - view_image        │  │ - bash              │  │ - postgres          │
 │                     │  │ - read_file         │  │ - brave-search      │
@@ -219,7 +213,7 @@ class ThreadState(AgentState):
                                    ▼
                       ┌─────────────────────────┐
                       │   get_available_tools() │
-                      │   (packages/harness/medrix_flow/tools/__init__)  │
+                      │   (packages/harness/deerflow/tools/__init__)  │
                       └─────────────────────────┘
 ```
 
@@ -228,7 +222,7 @@ class ThreadState(AgentState):
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                          Model Factory                                   │
-│                     (packages/harness/medrix_flow/models/factory.py)                              │
+│                     (packages/harness/deerflow/models/factory.py)                              │
 └─────────────────────────────────────────────────────────────────────────┘
 
 config.yaml:
@@ -275,7 +269,7 @@ config.yaml:
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                          MCP Integration                                 │
-│                        (packages/harness/medrix_flow/mcp/manager.py)                              │
+│                        (packages/harness/deerflow/mcp/manager.py)                              │
 └─────────────────────────────────────────────────────────────────────────┘
 
 extensions_config.json:
@@ -313,7 +307,7 @@ extensions_config.json:
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                          Skills System                                   │
-│                       (packages/harness/medrix_flow/skills/loader.py)                             │
+│                       (packages/harness/deerflow/skills/loader.py)                             │
 └─────────────────────────────────────────────────────────────────────────┘
 
 Directory Structure:
@@ -343,7 +337,7 @@ SKILL.md Format:
 │ ---                                                                      │
 │                                                                          │
 │ # Skill Instructions                                                     │
-│ Content injected into system prompt...                                   │
+│ Loaded on demand after discovery or explicit slash activation...         │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -359,10 +353,10 @@ SKILL.md Format:
    POST /api/langgraph/threads/{thread_id}/runs
    {"input": {"messages": [{"role": "user", "content": "Hello"}]}}
 
-2. Nginx → LangGraph Server (2024)
-   Proxied to LangGraph server
+2. Nginx → Gateway API (8001)
+   `/api/langgraph/*` is rewritten to Gateway's LangGraph-compatible `/api/*` routes
 
-3. LangGraph Server
+3. Gateway embedded runtime
    a. Load/create thread state
    b. Execute middleware chain:
       - ThreadDataMiddleware: Set up paths
@@ -396,14 +390,14 @@ SKILL.md Format:
 
 2. Gateway receives file
    - Validates file
-   - Stores in .medrix-flow/threads/{thread_id}/user-data/uploads/
+   - Stores in .deer-flow/threads/{thread_id}/user-data/uploads/
    - If document: converts to Markdown via markitdown
 
 3. Returns response
    {
      "files": [{
        "filename": "doc.pdf",
-       "path": ".medrix-flow/.../uploads/doc.pdf",
+       "path": ".deer-flow/.../uploads/doc.pdf",
        "virtual_path": "/mnt/user-data/uploads/doc.pdf",
        "artifact_url": "/api/threads/.../artifacts/mnt/.../doc.pdf"
      }]
@@ -418,14 +412,14 @@ SKILL.md Format:
 ### Thread Cleanup Flow
 
 ```
-1. Client deletes conversation via LangGraph
+1. Client deletes conversation via the LangGraph-compatible Gateway route
    DELETE /api/langgraph/threads/{thread_id}
 
 2. Web UI follows up with Gateway cleanup
    DELETE /api/threads/{thread_id}
 
-3. Gateway removes local MedrixFlow-managed files
-   - Deletes .medrix-flow/threads/{thread_id}/ recursively
+3. Gateway removes local DeerFlow-managed files
+   - Deletes .deer-flow/threads/{thread_id}/ recursively
    - Missing directories are treated as a no-op
    - Invalid thread IDs are rejected before filesystem access
 ```
@@ -433,17 +427,17 @@ SKILL.md Format:
 ### Configuration Reload
 
 ```
-1. Client updates MCP config
+1. Client updates MCP config or requests a cache reset
    PUT /api/mcp/config
+   POST /api/mcp/cache/reset
 
-2. Gateway writes extensions_config.json
-   - Updates mcpServers section
-   - File mtime changes
+2. Gateway updates runtime state
+   - PUT writes extensions_config.json and reloads configuration
+   - Both endpoints reset the MCP tools cache and persistent sessions
 
-3. MCP Manager detects change
-   - get_cached_mcp_tools() checks mtime
-   - If changed: reinitializes MCP client
-   - Loads updated server configurations
+3. MCP Manager reloads on next use
+   - get_cached_mcp_tools() lazily reinitializes MCP tools
+   - Loads current server configurations and tool lists
 
 4. Next agent run uses new tools
 ```

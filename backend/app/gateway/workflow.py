@@ -278,11 +278,7 @@ def _find_decision_payload(value: Any) -> dict[str, Any] | None:
     if not isinstance(value, dict):
         return None
 
-    if isinstance(value.get("title"), str) and (
-        isinstance(value.get("rationale"), str)
-        or isinstance(value.get("next_step"), str)
-        or isinstance(value.get("decision_type"), str)
-    ):
+    if isinstance(value.get("title"), str) and (isinstance(value.get("rationale"), str) or isinstance(value.get("next_step"), str) or isinstance(value.get("decision_type"), str)):
         return value
 
     for key in ("decision", "args", "input", "output", "content", "payload", "result"):

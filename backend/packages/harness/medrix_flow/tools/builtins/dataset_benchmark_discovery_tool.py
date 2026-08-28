@@ -64,10 +64,7 @@ async def dataset_benchmark_discovery_tool(
         return Command(update={"messages": [ToolMessage(f"Error: {exc}", tool_call_id=tool_call_id)]})
 
     source_summary = ", ".join(benchmark_map.sources_requested)
-    message = (
-        f"Dataset/benchmark map ready with {len(benchmark_map.entries)} candidate(s) "
-        f"from {source_summary}. Restricted or uncertain sources were marked for manual verification."
-    )
+    message = f"Dataset/benchmark map ready with {len(benchmark_map.entries)} candidate(s) from {source_summary}. Restricted or uncertain sources were marked for manual verification."
     return Command(
         update={
             "artifacts": [_virtual_output_path(outputs_dir, output_path)],

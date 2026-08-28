@@ -578,10 +578,7 @@ def _render_skills_prompt_section(
     container_base_path: str,
     skill_items: tuple[tuple[str, str, str], ...],
 ) -> str:
-    rendered_items = "\n".join(
-        f"    <skill>\n        <name>{name}</name>\n        <description>{description}</description>\n        <location>{location}</location>\n    </skill>"
-        for name, description, location in skill_items
-    )
+    rendered_items = "\n".join(f"    <skill>\n        <name>{name}</name>\n        <description>{description}</description>\n        <location>{location}</location>\n    </skill>" for name, description, location in skill_items)
     skills_list = f"<available_skills>\n{rendered_items}\n</available_skills>"
     return f"""<skill_system>
 You have access to skills that provide optimized workflows for specific tasks. Each skill contains best practices, frameworks, and references to additional resources.
@@ -625,10 +622,7 @@ def get_skills_prompt_section(available_skills: set[str] | None = None) -> str:
     if not skills:
         return ""
 
-    skill_items = tuple(
-        (skill.name, skill.description, skill.get_container_file_path(container_base_path))
-        for skill in skills
-    )
+    skill_items = tuple((skill.name, skill.description, skill.get_container_file_path(container_base_path)) for skill in skills)
     return _render_skills_prompt_section(container_base_path, skill_items)
 
 

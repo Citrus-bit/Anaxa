@@ -70,11 +70,7 @@ def test_experiment_service_classification_bundle(tmp_path):
     assert any(path.endswith("robustness_results.json") for path in result.bundle.export_files)
     assert any(path.endswith("error_analysis.md") for path in result.bundle.export_files)
     assert any(path.endswith("claim_support_matrix.json") for path in result.bundle.export_files)
-    claim_path = next(
-        outputs / path.removeprefix("/mnt/user-data/outputs/")
-        for path in result.bundle.export_files
-        if path.endswith("claim_support_matrix.json")
-    )
+    claim_path = next(outputs / path.removeprefix("/mnt/user-data/outputs/") for path in result.bundle.export_files if path.endswith("claim_support_matrix.json"))
     claim_matrix = json.loads(claim_path.read_text(encoding="utf-8"))
     assert any(item["support_status"] == "supported_by_experiment" for item in claim_matrix["claims"])
     assert any(item["support_status"] == "unsupported" and "superior" in item["claim"] for item in claim_matrix["claims"])
@@ -117,19 +113,11 @@ def test_experiment_service_synthetic_mode_exports_simulation_evidence(tmp_path)
     assert any(path.endswith("synthetic_results.csv") for path in result.bundle.export_files)
     assert any(path.endswith("synthetic_inputs/synthetic_dataset.csv") for path in result.bundle.export_files)
 
-    claim_path = next(
-        outputs / path.removeprefix("/mnt/user-data/outputs/")
-        for path in result.bundle.export_files
-        if path.endswith("claim_support_matrix.json")
-    )
+    claim_path = next(outputs / path.removeprefix("/mnt/user-data/outputs/") for path in result.bundle.export_files if path.endswith("claim_support_matrix.json"))
     claim_matrix = json.loads(claim_path.read_text(encoding="utf-8"))
     assert claim_matrix["simulation_disclosure"]
     assert any(item["support_status"] == "supported_by_simulation" for item in claim_matrix["claims"])
-    assert all(
-        item.get("simulation_assumptions_path") == "simulation_assumptions.json"
-        for item in claim_matrix["claims"]
-        if item.get("support_status") == "supported_by_simulation"
-    )
+    assert all(item.get("simulation_assumptions_path") == "simulation_assumptions.json" for item in claim_matrix["claims"] if item.get("support_status") == "supported_by_simulation")
     asyncio.run(db.close())
 
 
@@ -160,20 +148,10 @@ def test_experiment_service_synthetic_mode_autofills_missing_experiment_inputs(t
     assert any(path.endswith("claim_support_matrix.json") for path in result.bundle.export_files)
     assert sum(path.endswith("synthetic_results.csv") for path in result.bundle.export_files) == 1
     assert sum(path.endswith("synthetic_results.json") for path in result.bundle.export_files) == 1
-    claim_path = next(
-        outputs / path.removeprefix("/mnt/user-data/outputs/")
-        for path in result.bundle.export_files
-        if path.endswith("claim_support_matrix.json")
-    )
+    claim_path = next(outputs / path.removeprefix("/mnt/user-data/outputs/") for path in result.bundle.export_files if path.endswith("claim_support_matrix.json"))
     claim_matrix = json.loads(claim_path.read_text(encoding="utf-8"))
-    assert any(
-        item["support_status"] == "supported_by_simulation" and "Ablation" in item["claim"]
-        for item in claim_matrix["claims"]
-    )
-    assert any(
-        item["support_status"] == "supported_by_simulation" and "Robustness" in item["claim"]
-        for item in claim_matrix["claims"]
-    )
+    assert any(item["support_status"] == "supported_by_simulation" and "Ablation" in item["claim"] for item in claim_matrix["claims"])
+    assert any(item["support_status"] == "supported_by_simulation" and "Robustness" in item["claim"] for item in claim_matrix["claims"])
     asyncio.run(db.close())
 
 
@@ -205,21 +183,9 @@ def test_experiment_service_synthetic_unsupervised_workflows_record_primary_metr
             )
 
         assert result.run.status == "success"
-        claim_path = next(
-            outputs / path.removeprefix("/mnt/user-data/outputs/")
-            for path in result.bundle.export_files
-            if path.endswith("claim_support_matrix.json")
-        )
-        ablation_path = next(
-            outputs / path.removeprefix("/mnt/user-data/outputs/")
-            for path in result.bundle.export_files
-            if path.endswith("ablation_results.json")
-        )
-        robustness_path = next(
-            outputs / path.removeprefix("/mnt/user-data/outputs/")
-            for path in result.bundle.export_files
-            if path.endswith("robustness_results.json")
-        )
+        claim_path = next(outputs / path.removeprefix("/mnt/user-data/outputs/") for path in result.bundle.export_files if path.endswith("claim_support_matrix.json"))
+        ablation_path = next(outputs / path.removeprefix("/mnt/user-data/outputs/") for path in result.bundle.export_files if path.endswith("ablation_results.json"))
+        robustness_path = next(outputs / path.removeprefix("/mnt/user-data/outputs/") for path in result.bundle.export_files if path.endswith("robustness_results.json"))
 
         claim_matrix = json.loads(claim_path.read_text(encoding="utf-8"))
         ablation = json.loads(ablation_path.read_text(encoding="utf-8"))
@@ -280,11 +246,7 @@ def test_experiment_service_preserves_empirical_method_contract(tmp_path):
 
     assert result.run.status == "success"
     assert any(path.endswith("empirical_method_contract.json") for path in result.bundle.export_files)
-    contract_path = next(
-        outputs / path.removeprefix("/mnt/user-data/outputs/")
-        for path in result.bundle.export_files
-        if path.endswith("empirical_method_contract.json")
-    )
+    contract_path = next(outputs / path.removeprefix("/mnt/user-data/outputs/") for path in result.bundle.export_files if path.endswith("empirical_method_contract.json"))
     contract = json.loads(contract_path.read_text(encoding="utf-8"))
     assert contract["skill"] == "empirical-research-methods"
     assert contract["empirical_method"] == "did"

@@ -109,10 +109,7 @@ def present_file_tool(
                         normalized_paths.append(normalized_audit_path)
                         if not audit_result.passed:
                             normalized_paths.append(normalized_path)
-                            diagnostics.append(
-                                f"Citation audit failed for {normalized_path}; PDF was not generated. "
-                                + " ".join(audit_result.violations)
-                            )
+                            diagnostics.append(f"Citation audit failed for {normalized_path}; PDF was not generated. " + " ".join(audit_result.violations))
                             logger.warning("LaTeX citation audit failed for %s: %s", normalized_path, audit_result.violations)
                             continue
 

@@ -439,11 +439,7 @@ class AcademicRepository:
                 ]
                 await self._db.conn.executemany(
                     "INSERT OR IGNORE INTO paper_aliases (paper_id, alias_type, alias_value) VALUES (?, ?, ?)",
-                    [
-                        (paper_id, alias_type, alias_value)
-                        for alias_type, alias_value in aliases
-                        if alias_value
-                    ],
+                    [(paper_id, alias_type, alias_value) for alias_type, alias_value in aliases if alias_value],
                 )
 
                 await self._db.conn.executemany(

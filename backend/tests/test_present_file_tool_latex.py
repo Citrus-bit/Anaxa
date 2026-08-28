@@ -83,11 +83,7 @@ def test_present_files_blocks_pdf_when_citation_audit_fails(tmp_path, monkeypatc
 def test_prepare_latex_preview_converts_unicode_subscripts(tmp_path):
     tex_path = tmp_path / "report.tex"
     tex_path.write_text(
-        "\\documentclass{article}\n"
-        "\\usepackage{graphicx}\n"
-        "\\begin{document}\n"
-        "Turns ratio N₁/N₂ and current I₀.\n"
-        "\\end{document}\n",
+        "\\documentclass{article}\n\\usepackage{graphicx}\n\\begin{document}\nTurns ratio N₁/N₂ and current I₀.\n\\end{document}\n",
         encoding="utf-8",
     )
 
@@ -102,11 +98,7 @@ def test_prepare_latex_preview_converts_unicode_subscripts(tmp_path):
 def test_prepare_latex_preview_hides_bare_hyperref_link_borders(tmp_path):
     tex_path = tmp_path / "report.tex"
     tex_path.write_text(
-        "\\documentclass{article}\n"
-        "\\usepackage{hyperref}\n"
-        "\\begin{document}\n"
-        "See Figure~\\ref{fig:example} and \\cite{smith2024}.\n"
-        "\\end{document}\n",
+        "\\documentclass{article}\n\\usepackage{hyperref}\n\\begin{document}\nSee Figure~\\ref{fig:example} and \\cite{smith2024}.\n\\end{document}\n",
         encoding="utf-8",
     )
 
@@ -120,11 +112,7 @@ def test_prepare_latex_preview_hides_bare_hyperref_link_borders(tmp_path):
 def test_prepare_latex_preview_hides_configured_hyperref_link_borders(tmp_path):
     tex_path = tmp_path / "report.tex"
     tex_path.write_text(
-        "\\documentclass{article}\n"
-        "\\usepackage[colorlinks=false]{hyperref}\n"
-        "\\begin{document}\n"
-        "See Figure~\\ref{fig:example} and \\cite{smith2024}.\n"
-        "\\end{document}\n",
+        "\\documentclass{article}\n\\usepackage[colorlinks=false]{hyperref}\n\\begin{document}\nSee Figure~\\ref{fig:example} and \\cite{smith2024}.\n\\end{document}\n",
         encoding="utf-8",
     )
 
@@ -138,12 +126,7 @@ def test_prepare_latex_preview_hides_configured_hyperref_link_borders(tmp_path):
 def test_prepare_latex_preview_hides_existing_hypersetup_link_borders(tmp_path):
     tex_path = tmp_path / "report.tex"
     tex_path.write_text(
-        "\\documentclass{article}\n"
-        "\\usepackage{hyperref}\n"
-        "\\hypersetup{colorlinks=false}\n"
-        "\\begin{document}\n"
-        "See Figure~\\ref{fig:example} and \\cite{smith2024}.\n"
-        "\\end{document}\n",
+        "\\documentclass{article}\n\\usepackage{hyperref}\n\\hypersetup{colorlinks=false}\n\\begin{document}\nSee Figure~\\ref{fig:example} and \\cite{smith2024}.\n\\end{document}\n",
         encoding="utf-8",
     )
 
@@ -151,19 +134,11 @@ def test_prepare_latex_preview_hides_existing_hypersetup_link_borders(tmp_path):
     content = prepared.read_text(encoding="utf-8")
 
     assert "\\hypersetup{colorlinks=false}" in content
-    assert content.index("\\hypersetup{colorlinks=false}") < content.index(
-        "\\hypersetup{hidelinks,pdfborder={0 0 0}}"
-    )
+    assert content.index("\\hypersetup{colorlinks=false}") < content.index("\\hypersetup{hidelinks,pdfborder={0 0 0}}")
 
 
 def test_latex_sanitizer_does_not_duplicate_hidden_hyperref_setup():
-    source = (
-        "\\documentclass{article}\n"
-        "\\usepackage[colorlinks=false]{hyperref}\n"
-        "\\begin{document}\n"
-        "See Figure~\\ref{fig:example}.\n"
-        "\\end{document}\n"
-    )
+    source = "\\documentclass{article}\n\\usepackage[colorlinks=false]{hyperref}\n\\begin{document}\nSee Figure~\\ref{fig:example}.\n\\end{document}\n"
 
     once = latex_utils._sanitize_latex_source(source)
     twice = latex_utils._sanitize_latex_source(once)
@@ -173,12 +148,7 @@ def test_latex_sanitizer_does_not_duplicate_hidden_hyperref_setup():
 
 
 def test_latex_sanitizer_does_not_add_hypersetup_without_hyperref():
-    source = (
-        "\\documentclass{article}\n"
-        "\\begin{document}\n"
-        "No links here.\n"
-        "\\end{document}\n"
-    )
+    source = "\\documentclass{article}\n\\begin{document}\nNo links here.\n\\end{document}\n"
 
     sanitized = latex_utils._sanitize_latex_source(source)
 

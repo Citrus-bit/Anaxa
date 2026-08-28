@@ -288,17 +288,11 @@ def _apply_reference_consistency(
         cited_keys = set(result.cited_keys)
         cited_overlap_count = len(cited_keys & academic_keys)
         if cited_keys and cited_overlap_count / len(cited_keys) < 0.5:
-            violations.append(
-                "Final manuscript citations are detached from academic_research references: "
-                f"{cited_overlap_count}/{len(cited_keys)} cited keys exist in the academic references.bib."
-            )
+            violations.append(f"Final manuscript citations are detached from academic_research references: {cited_overlap_count}/{len(cited_keys)} cited keys exist in the academic references.bib.")
         canonical_count = academic_bundle.canonical_reference_count
         if canonical_count is not None and canonical_count >= reference_policy.min_references:
             if result.reference_count < reference_policy.min_references:
-                violations.append(
-                    "Final references.bib is smaller than the academic_research corpus: "
-                    f"{result.reference_count} final entries vs {canonical_count} canonical references."
-                )
+                violations.append(f"Final references.bib is smaller than the academic_research corpus: {result.reference_count} final entries vs {canonical_count} canonical references.")
 
     return replace(
         result,
@@ -523,15 +517,9 @@ def manuscript_export_tool(
         if pdf_text_audit_result is not None:
             artifact_files.append(pdf_text_audit_path)
         artifacts = _artifact_paths(outputs_dir, *artifact_files)
-        message = (
-            f"PASS: manuscript_export wrote `{_virtual_output_path(outputs_dir, final_pdf_path)}`. "
-            f"BibTeX keys: {len(audit_result.citation_keys)}; cited keys: {len(audit_result.cited_keys)}."
-        )
+        message = f"PASS: manuscript_export wrote `{_virtual_output_path(outputs_dir, final_pdf_path)}`. BibTeX keys: {len(audit_result.citation_keys)}; cited keys: {len(audit_result.cited_keys)}."
         if audit_result.stale_claims:
-            message += (
-                f" Citation audit noted {len(audit_result.stale_claims)} stale claim_map entr"
-                f"{'y' if len(audit_result.stale_claims) == 1 else 'ies'} that no longer appear in the manuscript."
-            )
+            message += f" Citation audit noted {len(audit_result.stale_claims)} stale claim_map entr{'y' if len(audit_result.stale_claims) == 1 else 'ies'} that no longer appear in the manuscript."
         return Command(
             update={
                 "artifacts": artifacts,

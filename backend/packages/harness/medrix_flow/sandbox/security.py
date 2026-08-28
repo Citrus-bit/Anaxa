@@ -64,7 +64,4 @@ def enforce_safe_sandbox_configuration(config=None) -> None:
         config = get_app_config()
 
     if is_production_environment() and uses_local_sandbox_provider(config):
-        raise RuntimeError(
-            "LocalSandboxProvider is not allowed in production. "
-            "Switch sandbox.use to medrix_flow.community.aio_sandbox:AioSandboxProvider."
-        )
+        raise RuntimeError("LocalSandboxProvider is not allowed in production. Switch sandbox.use to medrix_flow.community.aio_sandbox:AioSandboxProvider.")

@@ -1,4 +1,4 @@
-"""Tests for token usage tracking in MedrixFlowClient."""
+"""Tests for token usage tracking in DeerFlowClient."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
-from medrix_flow.client import MedrixFlowClient
+from deerflow.client import DeerFlowClient
 
 # ---------------------------------------------------------------------------
 # _serialize_message — usage_metadata passthrough
@@ -22,7 +22,7 @@ class TestSerializeMessageUsageMetadata:
             id="msg-1",
             usage_metadata={"input_tokens": 100, "output_tokens": 50, "total_tokens": 150},
         )
-        result = MedrixFlowClient._serialize_message(msg)
+        result = DeerFlowClient._serialize_message(msg)
         assert result["type"] == "ai"
         assert result["usage_metadata"] == {
             "input_tokens": 100,
@@ -32,19 +32,19 @@ class TestSerializeMessageUsageMetadata:
 
     def test_ai_message_without_usage_metadata(self):
         msg = AIMessage(content="Hello", id="msg-2")
-        result = MedrixFlowClient._serialize_message(msg)
+        result = DeerFlowClient._serialize_message(msg)
         assert result["type"] == "ai"
         assert "usage_metadata" not in result
 
     def test_tool_message_never_has_usage_metadata(self):
         msg = ToolMessage(content="result", tool_call_id="tc-1", name="search")
-        result = MedrixFlowClient._serialize_message(msg)
+        result = DeerFlowClient._serialize_message(msg)
         assert result["type"] == "tool"
         assert "usage_metadata" not in result
 
     def test_human_message_never_has_usage_metadata(self):
         msg = HumanMessage(content="Hi")
-        result = MedrixFlowClient._serialize_message(msg)
+        result = DeerFlowClient._serialize_message(msg)
         assert result["type"] == "human"
         assert "usage_metadata" not in result
 
@@ -55,7 +55,7 @@ class TestSerializeMessageUsageMetadata:
             tool_calls=[{"name": "search", "args": {"q": "test"}, "id": "tc-1"}],
             usage_metadata={"input_tokens": 200, "output_tokens": 30, "total_tokens": 230},
         )
-        result = MedrixFlowClient._serialize_message(msg)
+        result = DeerFlowClient._serialize_message(msg)
         assert result["type"] == "ai"
         assert result["tool_calls"] == [{"name": "search", "args": {"q": "test"}, "id": "tc-1"}]
         assert result["usage_metadata"]["input_tokens"] == 200
@@ -67,7 +67,7 @@ class TestSerializeMessageUsageMetadata:
             id="msg-4",
             usage_metadata={"input_tokens": 0, "output_tokens": 0, "total_tokens": 0},
         )
-        result = MedrixFlowClient._serialize_message(msg)
+        result = DeerFlowClient._serialize_message(msg)
         assert result["usage_metadata"] == {
             "input_tokens": 0,
             "output_tokens": 0,
@@ -147,6 +147,7 @@ def _mock_app_config():
     model.model_dump.return_value = {"name": "test-model", "use": "langchain_openai:ChatOpenAI"}
     config = MagicMock()
     config.models = [model]
+    config.database.checkpoint_delta.snapshot_frequency = 10
     return config
 
 
@@ -154,8 +155,8 @@ class TestStreamUsageIntegration:
     """Test that stream() emits usage_metadata in messages-tuple and end events."""
 
     def _make_client(self):
-        with patch("medrix_flow.client.get_app_config", return_value=_mock_app_config()):
-            return MedrixFlowClient()
+        with patch("deerflow.client.get_app_config", return_value=_mock_app_config()):
+            return DeerFlowClient()
 
     def test_stream_emits_usage_in_messages_tuple(self):
         """messages-tuple AI event should include usage_metadata when present."""
@@ -177,12 +178,7 @@ class TestStreamUsageIntegration:
             events = list(client.stream("hi", thread_id="t1"))
 
         # Find the AI text messages-tuple event
-        ai_text_events = [
-            e for e in events
-            if e.type == "messages-tuple"
-            and e.data.get("type") == "ai"
-            and e.data.get("content") == "Hello!"
-        ]
+        ai_text_events = [e for e in events if e.type == "messages-tuple" and e.data.get("type") == "ai" and e.data.get("content") == "Hello!"]
         assert len(ai_text_events) == 1
         event_data = ai_text_events[0].data
         assert "usage_metadata" in event_data
@@ -244,12 +240,7 @@ class TestStreamUsageIntegration:
             events = list(client.stream("hi", thread_id="t1"))
 
         # messages-tuple AI event should NOT have usage_metadata
-        ai_text_events = [
-            e for e in events
-            if e.type == "messages-tuple"
-            and e.data.get("type") == "ai"
-            and e.data.get("content") == "Hello!"
-        ]
+        ai_text_events = [e for e in events if e.type == "messages-tuple" and e.data.get("type") == "ai" and e.data.get("content") == "Hello!"]
         assert len(ai_text_events) == 1
         assert "usage_metadata" not in ai_text_events[0].data
 
@@ -290,12 +281,7 @@ class TestStreamUsageIntegration:
             events = list(client.stream("search", thread_id="t1"))
 
         # Final AI text event should have usage_metadata
-        ai_text_events = [
-            e for e in events
-            if e.type == "messages-tuple"
-            and e.data.get("type") == "ai"
-            and e.data.get("content") == "Here is the answer."
-        ]
+        ai_text_events = [e for e in events if e.type == "messages-tuple" and e.data.get("type") == "ai" and e.data.get("content") == "Here is the answer."]
         assert len(ai_text_events) == 1
         assert ai_text_events[0].data["usage_metadata"]["total_tokens"] == 300
 

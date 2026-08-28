@@ -373,7 +373,8 @@ def make_lead_agent(config: RunnableConfig):
                 subagent_enabled=subagent_enabled,
                 plan_mode=False,
                 visual_output_intent=False,
-            ) + [setup_agent],
+            )
+            + [setup_agent],
             middleware=_build_middlewares(config, model_name=model_name),
             system_prompt=apply_prompt_template(
                 subagent_enabled=subagent_enabled,

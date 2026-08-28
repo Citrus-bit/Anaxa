@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import asyncio
+import os
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from app.channels.base import Channel
-from app.channels.message_bus import MessageBus, OutboundMessage, ResolvedAttachment
+from app.channels.message_bus import InboundMessage, MessageBus, OutboundMessage, ResolvedAttachment
 
 
 def _run(coro):
@@ -115,7 +116,7 @@ class TestResolveAttachments:
         mock_paths.resolve_virtual_path.return_value = test_file
         mock_paths.sandbox_outputs_dir.return_value = outputs_dir
 
-        with patch("medrix_flow.config.paths.get_paths", return_value=mock_paths):
+        with patch("deerflow.config.paths.get_paths", return_value=mock_paths):
             result = _resolve_attachments(thread_id, ["/mnt/user-data/outputs/report.pdf"])
 
         assert len(result) == 1
@@ -138,7 +139,7 @@ class TestResolveAttachments:
         mock_paths.resolve_virtual_path.return_value = img
         mock_paths.sandbox_outputs_dir.return_value = outputs_dir
 
-        with patch("medrix_flow.config.paths.get_paths", return_value=mock_paths):
+        with patch("deerflow.config.paths.get_paths", return_value=mock_paths):
             result = _resolve_attachments(thread_id, ["/mnt/user-data/outputs/chart.png"])
 
         assert len(result) == 1
@@ -156,7 +157,7 @@ class TestResolveAttachments:
         mock_paths.resolve_virtual_path.return_value = outputs_dir / "nonexistent.txt"
         mock_paths.sandbox_outputs_dir.return_value = outputs_dir
 
-        with patch("medrix_flow.config.paths.get_paths", return_value=mock_paths):
+        with patch("deerflow.config.paths.get_paths", return_value=mock_paths):
             result = _resolve_attachments("t1", ["/mnt/user-data/outputs/nonexistent.txt"])
 
         assert result == []
@@ -168,7 +169,7 @@ class TestResolveAttachments:
         mock_paths = MagicMock()
         mock_paths.resolve_virtual_path.side_effect = ValueError("bad path")
 
-        with patch("medrix_flow.config.paths.get_paths", return_value=mock_paths):
+        with patch("deerflow.config.paths.get_paths", return_value=mock_paths):
             result = _resolve_attachments("t1", ["/invalid/path"])
 
         assert result == []
@@ -179,7 +180,7 @@ class TestResolveAttachments:
 
         mock_paths = MagicMock()
 
-        with patch("medrix_flow.config.paths.get_paths", return_value=mock_paths):
+        with patch("deerflow.config.paths.get_paths", return_value=mock_paths):
             result = _resolve_attachments("t1", ["/mnt/user-data/uploads/secret.pdf"])
 
         assert result == []
@@ -191,7 +192,7 @@ class TestResolveAttachments:
 
         mock_paths = MagicMock()
 
-        with patch("medrix_flow.config.paths.get_paths", return_value=mock_paths):
+        with patch("deerflow.config.paths.get_paths", return_value=mock_paths):
             result = _resolve_attachments("t1", ["/mnt/user-data/workspace/config.py"])
 
         assert result == []
@@ -213,7 +214,7 @@ class TestResolveAttachments:
         mock_paths.resolve_virtual_path.return_value = escaped_file
         mock_paths.sandbox_outputs_dir.return_value = outputs_dir
 
-        with patch("medrix_flow.config.paths.get_paths", return_value=mock_paths):
+        with patch("deerflow.config.paths.get_paths", return_value=mock_paths):
             result = _resolve_attachments(thread_id, ["/mnt/user-data/outputs/../uploads/stolen.txt"])
 
         assert result == []
@@ -231,14 +232,14 @@ class TestResolveAttachments:
         mock_paths = MagicMock()
         mock_paths.sandbox_outputs_dir.return_value = outputs_dir
 
-        def resolve_side_effect(tid, vpath):
+        def resolve_side_effect(tid, vpath, *, user_id=None):
             if "data.csv" in vpath:
                 return good_file
             return tmp_path / "missing.txt"
 
         mock_paths.resolve_virtual_path.side_effect = resolve_side_effect
 
-        with patch("medrix_flow.config.paths.get_paths", return_value=mock_paths):
+        with patch("deerflow.config.paths.get_paths", return_value=mock_paths):
             result = _resolve_attachments(
                 thread_id,
                 ["/mnt/user-data/outputs/data.csv", "/mnt/user-data/outputs/missing.txt"],
@@ -246,6 +247,136 @@ class TestResolveAttachments:
 
         assert len(result) == 1
         assert result[0].filename == "data.csv"
+
+
+# ---------------------------------------------------------------------------
+# Inbound file ingestion tests
+# ---------------------------------------------------------------------------
+
+
+class TestInboundFileIngestion:
+    def test_consumes_inline_channel_bytes_without_exposing_them_downstream(self, tmp_path):
+        from app.channels import manager
+
+        uploads_dir = tmp_path / "uploads"
+        uploads_dir.mkdir()
+        msg = InboundMessage(
+            channel_name="telegram",
+            chat_id="chat-1",
+            user_id="user-1",
+            text="see attachment",
+            files=[{"type": "file", "filename": "report.pdf", "_content": b"pdf bytes"}],
+        )
+
+        with patch("deerflow.uploads.manager.ensure_uploads_dir", return_value=uploads_dir):
+            result = _run(manager._ingest_inbound_files("thread-1", msg))
+
+        assert result == [
+            {
+                "filename": "report.pdf",
+                "size": len(b"pdf bytes"),
+                "path": "/mnt/user-data/uploads/report.pdf",
+                "is_image": False,
+            }
+        ]
+        assert (uploads_dir / "report.pdf").read_bytes() == b"pdf bytes"
+        assert "_content" not in msg.files[0]
+
+    def test_rejects_preexisting_symlink_destination(self, tmp_path):
+        from app.channels import manager
+
+        uploads_dir = tmp_path / "uploads"
+        uploads_dir.mkdir()
+        outside_file = tmp_path / "outside-created.txt"
+        (uploads_dir / "victim.txt").symlink_to(outside_file)
+
+        msg = InboundMessage(
+            channel_name="test-channel",
+            chat_id="chat-1",
+            user_id="user-1",
+            text="see attachment",
+            files=[{"filename": "victim.txt", "url": "https://example.invalid/victim.txt"}],
+        )
+
+        async def fake_reader(file_info, client):
+            return b"attacker data"
+
+        with (
+            patch("deerflow.uploads.manager.ensure_uploads_dir", return_value=uploads_dir),
+            patch.dict(manager.INBOUND_FILE_READERS, {"test-channel": fake_reader}, clear=False),
+        ):
+            result = _run(manager._ingest_inbound_files("thread-1", msg))
+
+        assert result == []
+        assert not outside_file.exists()
+        assert (uploads_dir / "victim.txt").is_symlink()
+
+    def test_rejects_dangling_symlink_destination(self, tmp_path):
+        from app.channels import manager
+
+        uploads_dir = tmp_path / "uploads"
+        uploads_dir.mkdir()
+        missing_target = tmp_path / "missing-created.txt"
+        (uploads_dir / "victim.txt").symlink_to(missing_target)
+
+        msg = InboundMessage(
+            channel_name="test-channel",
+            chat_id="chat-1",
+            user_id="user-1",
+            text="see attachment",
+            files=[{"filename": "victim.txt", "url": "https://example.invalid/victim.txt"}],
+        )
+
+        async def fake_reader(file_info, client):
+            return b"attacker data"
+
+        with (
+            patch("deerflow.uploads.manager.ensure_uploads_dir", return_value=uploads_dir),
+            patch.dict(manager.INBOUND_FILE_READERS, {"test-channel": fake_reader}, clear=False),
+        ):
+            result = _run(manager._ingest_inbound_files("thread-1", msg))
+
+        assert result == []
+        assert not missing_target.exists()
+        assert (uploads_dir / "victim.txt").is_symlink()
+
+    def test_hardlinked_existing_file_is_not_overwritten(self, tmp_path):
+        from app.channels import manager
+
+        uploads_dir = tmp_path / "uploads"
+        uploads_dir.mkdir()
+        outside_file = tmp_path / "outside-created.txt"
+        outside_file.write_text("protected", encoding="utf-8")
+        os.link(outside_file, uploads_dir / "victim.txt")
+
+        msg = InboundMessage(
+            channel_name="test-channel",
+            chat_id="chat-1",
+            user_id="user-1",
+            text="see attachment",
+            files=[{"filename": "victim.txt", "url": "https://example.invalid/victim.txt"}],
+        )
+
+        async def fake_reader(file_info, client):
+            return b"new attachment data"
+
+        with (
+            patch("deerflow.uploads.manager.ensure_uploads_dir", return_value=uploads_dir),
+            patch.dict(manager.INBOUND_FILE_READERS, {"test-channel": fake_reader}, clear=False),
+        ):
+            result = _run(manager._ingest_inbound_files("thread-1", msg))
+
+        assert result == [
+            {
+                "filename": "victim_1.txt",
+                "size": len(b"new attachment data"),
+                "path": "/mnt/user-data/uploads/victim_1.txt",
+                "is_image": False,
+            }
+        ]
+        assert outside_file.read_text(encoding="utf-8") == "protected"
+        assert (uploads_dir / "victim.txt").read_text(encoding="utf-8") == "protected"
+        assert (uploads_dir / "victim_1.txt").read_bytes() == b"new attachment data"
 
 
 # ---------------------------------------------------------------------------
@@ -276,6 +407,31 @@ class _DummyChannel(Channel):
 
 
 class TestBaseChannelOnOutbound:
+    def test_default_receive_file_returns_original_message(self):
+        """The base Channel.receive_file returns the original message unchanged."""
+
+        class MinimalChannel(Channel):
+            async def start(self):
+                pass
+
+            async def stop(self):
+                pass
+
+            async def send(self, msg):
+                pass
+
+        from app.channels.message_bus import InboundMessage
+
+        bus = MessageBus()
+        ch = MinimalChannel(name="minimal", bus=bus, config={})
+        msg = InboundMessage(channel_name="minimal", chat_id="c1", user_id="u1", text="hello", files=[{"file_key": "k1"}])
+
+        result = _run(ch.receive_file(msg, "thread-1"))
+
+        assert result is msg
+        assert result.text == "hello"
+        assert result.files == [{"file_key": "k1"}]
+
     def test_send_file_called_for_each_attachment(self, tmp_path):
         """_on_outbound sends text first, then uploads each attachment."""
         bus = MessageBus()
@@ -421,7 +577,7 @@ class TestManagerArtifactResolution:
 
         # Basic smoke test: empty artifacts returns empty list
         mock_paths = MagicMock()
-        with patch("medrix_flow.config.paths.get_paths", return_value=mock_paths):
+        with patch("deerflow.config.paths.get_paths", return_value=mock_paths):
             result = _resolve_attachments("t1", [])
         assert result == []
 

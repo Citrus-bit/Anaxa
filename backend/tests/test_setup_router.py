@@ -8,11 +8,7 @@ from fastapi.testclient import TestClient
 from app.gateway.routers import setup
 from medrix_flow.utils.google_image import build_google_image_smoke_request
 
-GOOGLE_MODEL_VALIDATION_SUCCESS_MESSAGE = (
-    "Google AI Studio model validation succeeded. "
-    "The configured model returned image content using a low-cost 1K validation request. "
-    "This does not guarantee 4K production output."
-)
+GOOGLE_MODEL_VALIDATION_SUCCESS_MESSAGE = "Google AI Studio model validation succeeded. The configured model returned image content using a low-cost 1K validation request. This does not guarantee 4K production output."
 
 
 def test_setup_test_tool_key_supports_openalex() -> None:

@@ -6,6 +6,7 @@ from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
 from app.gateway.deps import get_research_service
+from deerflow.utils.thread_id import ThreadId
 from medrix_flow.research import ResearchStage
 
 router = APIRouter(prefix="/api/research", tags=["research"])
@@ -47,7 +48,9 @@ def _raise_for_value_error(exc: ValueError) -> None:
 @router.get("/quests")
 async def list_quests(
     request: Request,
-    thread_id: str | None = Query(default=None),
+    # The default makes this query filter optional; keeping the canonical
+    # ``ThreadId`` annotation ensures any supplied value is still validated.
+    thread_id: ThreadId = Query(default=None),
 ) -> dict[str, Any]:
     service = get_research_service(request)
     quests = await service.list_quests(thread_id)

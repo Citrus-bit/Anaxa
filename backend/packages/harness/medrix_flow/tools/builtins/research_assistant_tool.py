@@ -475,10 +475,7 @@ async def research_assistant_tool(
                 tool_name="research_assistant",
             )
             if result.blocked and result.required_gate:
-                message = (
-                    f"Research quest `{result.quest.quest_id}` is blocked before `{result.required_gate.stage}`. "
-                    f"Required gate: `{result.required_gate.gate_type}`."
-                )
+                message = f"Research quest `{result.quest.quest_id}` is blocked before `{result.required_gate.stage}`. Required gate: `{result.required_gate.gate_type}`."
             else:
                 message = f"Research quest `{result.quest.quest_id}` advanced to `{result.quest.stage}`."
         elif action == "run_pipeline":
@@ -501,12 +498,7 @@ async def research_assistant_tool(
             resolved_delivery_mode = delivery_mode or config.research.default_delivery_mode
             thread_model_name = _resolve_thread_model_name(runtime)
             draft_model_name = config.research.fast_draft_model or config.research.manuscript_model or thread_model_name
-            finalization_model_name = (
-                config.research.finalization_model
-                or config.research.manuscript_model
-                or config.research.fast_draft_model
-                or thread_model_name
-            )
+            finalization_model_name = config.research.finalization_model or config.research.manuscript_model or config.research.fast_draft_model or thread_model_name
             config_auto_gates = auto_gates if auto_gates is not None else config.research.default_auto_gates
             resolved_auto_gates = list(config_auto_gates)
             if resolved_delivery_mode == "fast_draft_first" and "experiment_execution" not in resolved_auto_gates:
@@ -525,11 +517,7 @@ async def research_assistant_tool(
             elif max_stages is None:
                 resolved_max_stages = max(resolved_max_stages, 11)
             resolved_quality_mode = quality_mode or config.research.default_quality_mode
-            resolved_repair_budget = (
-                quality_repair_budget
-                if quality_repair_budget is not None
-                else config.research.default_quality_repair_budget
-            )
+            resolved_repair_budget = quality_repair_budget if quality_repair_budget is not None else config.research.default_quality_repair_budget
             pipeline_model_name = finalization_model_name if resolved_delivery_mode == "final_only" else draft_model_name
             result = await orchestrator.run_pipeline(
                 resolved_quest_id,
@@ -540,10 +528,7 @@ async def research_assistant_tool(
                 delivery_mode=resolved_delivery_mode,
                 content_generator=_build_content_generator(pipeline_model_name),
             )
-            message = (
-                f"Research pipeline `{result.quest_id}` returned `{result.status}` at stage `{result.final_stage}`. "
-                f"Stages executed: {len(result.stages_executed)}."
-            )
+            message = f"Research pipeline `{result.quest_id}` returned `{result.status}` at stage `{result.final_stage}`. Stages executed: {len(result.stages_executed)}."
             if result.final_stage == "final_bundle":
                 export_result = await _export_final_manuscript_bundle(str(thread_id), await service.get_snapshot(resolved_quest_id))
                 response_artifacts.extend(export_result.artifacts)

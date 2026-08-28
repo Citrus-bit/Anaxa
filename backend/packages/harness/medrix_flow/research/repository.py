@@ -281,9 +281,7 @@ class ResearchRepository:
                 (thread_id,),
             )
         else:
-            cursor = await self._db.conn.execute(
-                "SELECT * FROM research_quests ORDER BY updated_at DESC LIMIT 100"
-            )
+            cursor = await self._db.conn.execute("SELECT * FROM research_quests ORDER BY updated_at DESC LIMIT 100")
         rows = await cursor.fetchall()
         return [self._quest_from_row(row) for row in rows]
 

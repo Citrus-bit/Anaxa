@@ -65,16 +65,12 @@ async def academic_research_tool(
     """
     thread_id = runtime.context.get("thread_id")
     if not thread_id:
-        return Command(
-            update={"messages": [ToolMessage("Error: thread_id is required for academic_research.", tool_call_id=tool_call_id)]}
-        )
+        return Command(update={"messages": [ToolMessage("Error: thread_id is required for academic_research.", tool_call_id=tool_call_id)]})
 
     thread_data = runtime.state.get("thread_data") or {}
     outputs_path = thread_data.get("outputs_path")
     if not outputs_path:
-        return Command(
-            update={"messages": [ToolMessage("Error: thread outputs path is not available.", tool_call_id=tool_call_id)]}
-        )
+        return Command(update={"messages": [ToolMessage("Error: thread outputs path is not available.", tool_call_id=tool_call_id)]})
 
     db = SQLiteRuntimeDB(get_paths().academic_db_file)
     await db.connect()
@@ -99,9 +95,7 @@ async def academic_research_tool(
         )
     except Exception as exc:
         await db.close()
-        return Command(
-            update={"messages": [ToolMessage(f"Error: {exc}", tool_call_id=tool_call_id)]}
-        )
+        return Command(update={"messages": [ToolMessage(f"Error: {exc}", tool_call_id=tool_call_id)]})
 
     try:
         artifact_paths = []
@@ -119,11 +113,7 @@ async def academic_research_tool(
             f"Artifacts: {', '.join(Path(path).name for path in result.export_files)}"
         )
         if coverage_audit:
-            summary += (
-                f" Coverage audit: {coverage_audit.get('status', 'unknown')} "
-                f"({coverage_audit.get('included_reference_count', included_refs)}/"
-                f"{coverage_audit.get('min_reference_count', 'n/a')} minimum references)."
-            )
+            summary += f" Coverage audit: {coverage_audit.get('status', 'unknown')} ({coverage_audit.get('included_reference_count', included_refs)}/{coverage_audit.get('min_reference_count', 'n/a')} minimum references)."
         return Command(
             update={
                 "artifacts": artifact_paths,

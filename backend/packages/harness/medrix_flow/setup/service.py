@@ -188,18 +188,10 @@ def build_image_generation_config(raw: dict[str, Any]) -> ImageGenerationConfig:
     raw_image_generation = raw.get("image_generation") or {}
     raw_google = raw_image_generation.get("google_ai_studio") or {}
     raw_openai = raw_image_generation.get("openai_compatible") or {}
-    active_provider = resolve_image_provider_kind(
-        raw_image_generation.get("active_provider") or get_non_empty_env_value(IMAGE_GEN_ACTIVE_PROVIDER_ENV)
-    )
-    google_model = (
-        raw_google.get("model")
-        or get_non_empty_env_value(IMAGE_GEN_GOOGLE_MODEL_ENV)
-        or DEFAULT_GOOGLE_IMAGE_MODEL
-    )
+    active_provider = resolve_image_provider_kind(raw_image_generation.get("active_provider") or get_non_empty_env_value(IMAGE_GEN_ACTIVE_PROVIDER_ENV))
+    google_model = raw_google.get("model") or get_non_empty_env_value(IMAGE_GEN_GOOGLE_MODEL_ENV) or DEFAULT_GOOGLE_IMAGE_MODEL
     openai_model = raw_openai.get("model") or get_non_empty_env_value(IMAGE_GEN_OPENAI_MODEL_ENV)
-    openai_base_url = normalize_base_url(
-        raw_openai.get("base_url") or get_non_empty_env_value(IMAGE_GEN_OPENAI_BASE_URL_ENV)
-    )
+    openai_base_url = normalize_base_url(raw_openai.get("base_url") or get_non_empty_env_value(IMAGE_GEN_OPENAI_BASE_URL_ENV))
 
     return ImageGenerationConfig(
         active_provider=active_provider,

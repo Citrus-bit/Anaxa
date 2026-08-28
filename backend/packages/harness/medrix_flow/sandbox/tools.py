@@ -98,7 +98,7 @@ def _resolve_skills_path(path: str) -> str:
     if path == skills_container:
         return skills_host
 
-    relative = path[len(skills_container):].lstrip("/")
+    relative = path[len(skills_container) :].lstrip("/")
     return str(Path(skills_host) / relative) if relative else skills_host
 
 
@@ -204,7 +204,7 @@ def mask_local_paths_in_output(output: str, thread_data: ThreadDataState | None)
                 matched_path = match.group(0)
                 if matched_path == _base:
                     return skills_container
-                relative = matched_path[len(_base):].lstrip("/\\")
+                relative = matched_path[len(_base) :].lstrip("/\\")
                 return f"{skills_container}/{relative}" if relative else skills_container
 
             result = pattern.sub(replace_skills, result)
@@ -228,7 +228,7 @@ def mask_local_paths_in_output(output: str, thread_data: ThreadDataState | None)
                 matched_path = match.group(0)
                 if matched_path == _base:
                     return _virtual
-                relative = matched_path[len(_base):].lstrip("/\\")
+                relative = matched_path[len(_base) :].lstrip("/\\")
                 return f"{_virtual}/{relative}" if relative else _virtual
 
             result = pattern.sub(replace_match, result)
@@ -346,10 +346,7 @@ def validate_local_bash_command_paths(command: str, thread_data: ThreadDataState
             _reject_path_traversal(absolute_path)
             continue
 
-        if any(
-            absolute_path == prefix.rstrip("/") or absolute_path.startswith(prefix)
-            for prefix in _LOCAL_BASH_SYSTEM_PATH_PREFIXES
-        ):
+        if any(absolute_path == prefix.rstrip("/") or absolute_path.startswith(prefix) for prefix in _LOCAL_BASH_SYSTEM_PATH_PREFIXES):
             continue
 
         unsafe_paths.append(absolute_path)

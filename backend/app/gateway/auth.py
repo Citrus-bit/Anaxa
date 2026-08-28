@@ -81,8 +81,5 @@ async def require_admin_access(request: Request) -> None:
 
     raise HTTPException(
         status_code=403,
-        detail=(
-            "This endpoint is restricted to loopback clients unless "
-            "MEDRIX_GATEWAY_ADMIN_TOKEN is configured."
-        ),
+        detail=("This endpoint is restricted to loopback clients unless MEDRIX_GATEWAY_ADMIN_TOKEN is configured."),
     )

@@ -51,11 +51,7 @@ class DeferredToolFilterMiddleware(AgentMiddleware[AgentState]):
 
         deferred_names = {e.name for e in registry.entries}
         activated_names = self._collect_activated_tool_names(list(getattr(request, "messages", []) or []))
-        active_tools = [
-            t
-            for t in request.tools
-            if getattr(t, "name", None) not in deferred_names or getattr(t, "name", None) in activated_names
-        ]
+        active_tools = [t for t in request.tools if getattr(t, "name", None) not in deferred_names or getattr(t, "name", None) in activated_names]
 
         if len(active_tools) < len(request.tools):
             logger.debug(f"Filtered {len(request.tools) - len(active_tools)} deferred tool schema(s) from model binding")

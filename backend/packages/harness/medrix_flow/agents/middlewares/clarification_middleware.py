@@ -112,9 +112,7 @@ class ClarificationMiddleware(AgentMiddleware[ClarificationMiddlewareState]):
         return filtered
 
     @staticmethod
-    def _filter_raw_tool_calls(
-        additional_kwargs: dict[str, Any], kept_ids: set[str], kept_names: set[str]
-    ) -> dict[str, Any]:
+    def _filter_raw_tool_calls(additional_kwargs: dict[str, Any], kept_ids: set[str], kept_names: set[str]) -> dict[str, Any]:
         """Keep raw provider tool-call metadata in sync with structured calls."""
         raw_tool_calls = additional_kwargs.get("tool_calls")
         if not isinstance(raw_tool_calls, list):
@@ -153,37 +151,17 @@ class ClarificationMiddleware(AgentMiddleware[ClarificationMiddlewareState]):
             return None
         last = messages[-1]
         tool_calls = [call for call in (last.tool_calls or []) if isinstance(call, dict)]
-        invalid_tool_calls = [
-            call
-            for call in (getattr(last, "invalid_tool_calls", None) or [])
-            if isinstance(call, dict)
-        ]
-        clarification_calls = [
-            call for call in tool_calls if call.get("name") == ASK_CLARIFICATION_TOOL_NAME
-        ]
-        invalid_clarification_calls = [
-            call for call in invalid_tool_calls if call.get("name") == ASK_CLARIFICATION_TOOL_NAME
-        ]
-        sibling_calls = [
-            call for call in tool_calls if call.get("name") != ASK_CLARIFICATION_TOOL_NAME
-        ]
+        invalid_tool_calls = [call for call in (getattr(last, "invalid_tool_calls", None) or []) if isinstance(call, dict)]
+        clarification_calls = [call for call in tool_calls if call.get("name") == ASK_CLARIFICATION_TOOL_NAME]
+        invalid_clarification_calls = [call for call in invalid_tool_calls if call.get("name") == ASK_CLARIFICATION_TOOL_NAME]
+        sibling_calls = [call for call in tool_calls if call.get("name") != ASK_CLARIFICATION_TOOL_NAME]
         if (not clarification_calls and not invalid_clarification_calls) or not sibling_calls:
             return None
 
-        kept_ids = {
-            str(call["id"])
-            for call in [*clarification_calls, *invalid_clarification_calls]
-            if isinstance(call.get("id"), str) and call["id"]
-        }
-        kept_names = {
-            str(call["name"])
-            for call in [*clarification_calls, *invalid_clarification_calls]
-            if isinstance(call.get("name"), str) and call["name"]
-        }
+        kept_ids = {str(call["id"]) for call in [*clarification_calls, *invalid_clarification_calls] if isinstance(call.get("id"), str) and call["id"]}
+        kept_names = {str(call["name"]) for call in [*clarification_calls, *invalid_clarification_calls] if isinstance(call.get("name"), str) and call["name"]}
         content = self._filter_tool_use_content(last.content, kept_ids, kept_names)
-        additional_kwargs = self._filter_raw_tool_calls(
-            dict(getattr(last, "additional_kwargs", {}) or {}), kept_ids, kept_names
-        )
+        additional_kwargs = self._filter_raw_tool_calls(dict(getattr(last, "additional_kwargs", {}) or {}), kept_ids, kept_names)
         patched = last.model_copy(
             update={
                 "tool_calls": clarification_calls,

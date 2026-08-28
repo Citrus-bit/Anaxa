@@ -1,160 +1,58 @@
+"""Stateless runs endpoints -- stream and wait without a pre-existing thread.
+
+These endpoints auto-create a temporary thread when no ``thread_id`` is
+supplied in the request body.  When a ``thread_id`` **is** provided, it
+is reused so that conversation history is preserved across calls.
+"""
+
 from __future__ import annotations
 
-import asyncio
-from typing import Any, Literal
+import logging
 
-from fastapi import APIRouter, HTTPException, Query, Request, Response
+from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field
 
-from app.gateway.deps import get_run_service
-from app.gateway.workflow import WorkflowSnapshot
-from medrix_flow.runtime.runs import RunRecord, RunStatus
+from app.gateway.authz import require_permission
+from app.gateway.deps import get_feedback_repo, get_run_event_store, get_run_manager, get_run_store, get_stream_bridge
+from app.gateway.legacy_runs import router as legacy_router
+from app.gateway.pagination import trim_run_message_page
+from app.gateway.run_models import RunCreateRequest
+from app.gateway.services import build_checkpoint_state_accessor, sse_consumer, start_run, wait_for_run_completion
+from deerflow.runtime import serialize_channel_values_for_api
+from deerflow.utils.thread_id import resolve_thread_id
 
-router = APIRouter(prefix="/api/threads", tags=["runs"])
-
-
-class RunCreateRequest(BaseModel):
-    run_id: str | None = Field(default=None, description="External run identifier for sideband registration.")
-    assistant_id: str | None = Field(default=None, description="Agent or assistant name.")
-    input: dict[str, Any] | None = Field(default=None, description="Graph input.")
-    metadata: dict[str, Any] | None = Field(default=None, description="Run metadata.")
-    config: dict[str, Any] | None = Field(default=None, description="RunnableConfig overrides.")
-    context: dict[str, Any] | None = Field(default=None, description="Frontend session context.")
-    stream_mode: list[str] | str | None = Field(default=None, description="Requested stream mode(s).")
-    multitask_strategy: Literal["reject", "interrupt", "rollback"] = Field(default="reject")
+logger = logging.getLogger(__name__)
+stateless_router = APIRouter(prefix="/api/runs", tags=["runs"])
+# Route decorators below target ``stateless_router``.  ``router`` is assembled
+# at the end of the module with the hidden Anaxa migration endpoints so direct
+# imports of ``app.gateway.routers.runs.router`` remain backwards compatible.
+router = stateless_router
 
 
-class RunResponse(BaseModel):
-    run_id: str
-    thread_id: str
-    assistant_id: str | None = None
-    status: str
-    metadata: dict[str, Any] = Field(default_factory=dict)
-    kwargs: dict[str, Any] = Field(default_factory=dict)
-    multitask_strategy: str = "reject"
-    created_at: str
-    updated_at: str
+def _resolve_thread_id(body: RunCreateRequest) -> str:
+    """Return the thread_id from the request body, or generate a new one."""
+    thread_id = ((body.config or {}).get("configurable") or {}).get("thread_id")
+    return resolve_thread_id(thread_id)
 
 
-class RunMessage(BaseModel):
-    seq: int
-    run_id: str
-    thread_id: str
-    event_type: str
-    caller: str
-    content: dict[str, Any]
-    created_at: str
+@router.post("/stream")
+async def stateless_stream(body: RunCreateRequest, request: Request) -> StreamingResponse:
+    """Create a run and stream events via SSE.
 
+    If ``config.configurable.thread_id`` is provided, the run is created
+    on the given thread so that conversation history is preserved.
+    Otherwise a new temporary thread is created.
+    """
+    thread_id = _resolve_thread_id(body)
+    bridge = get_stream_bridge(request)
+    run_mgr = get_run_manager(request)
+    record = await start_run(body, thread_id, request)
 
-class RunMessagePage(BaseModel):
-    data: list[RunMessage]
-    has_more: bool
-
-
-class FeedbackRequest(BaseModel):
-    rating: Literal[-1, 1]
-    comment: str | None = None
-
-
-class FeedbackResponse(BaseModel):
-    feedback_id: str
-    run_id: str
-    thread_id: str
-    rating: int
-    comment: str | None = None
-    created_at: str
-    updated_at: str | None = None
-
-
-class RunCompletionRequest(BaseModel):
-    status: Literal["success", "interrupted", "error"] = "success"
-
-
-class RunEventCreateRequest(BaseModel):
-    event_type: str = Field(..., min_length=1, max_length=80)
-    caller: str = Field(default="frontend", max_length=120)
-    content: dict[str, Any] = Field(default_factory=dict)
-
-
-def _record_to_response(record: RunRecord) -> RunResponse:
-    return RunResponse(
-        run_id=record.run_id,
-        thread_id=record.thread_id,
-        assistant_id=record.assistant_id,
-        status=record.status.value,
-        metadata=record.metadata,
-        kwargs=record.kwargs,
-        multitask_strategy=record.multitask_strategy,
-        created_at=record.created_at,
-        updated_at=record.updated_at,
-    )
-
-
-@router.post("/{thread_id}/runs", response_model=RunResponse)
-async def create_run(thread_id: str, body: RunCreateRequest, request: Request) -> RunResponse:
-    service = get_run_service(request)
-    record = await service.start_run(thread_id, body)
-    return _record_to_response(record)
-
-
-@router.get("/{thread_id}/runs", response_model=list[RunResponse])
-async def list_runs(thread_id: str, request: Request) -> list[RunResponse]:
-    service = get_run_service(request)
-    records = await service.list_runs(thread_id)
-    return [_record_to_response(record) for record in records]
-
-
-@router.get("/{thread_id}/runs/{run_id}", response_model=RunResponse)
-async def get_run(thread_id: str, run_id: str, request: Request) -> RunResponse:
-    service = get_run_service(request)
-    record = await service.require_run(thread_id, run_id)
-    return _record_to_response(record)
-
-
-@router.get("/{thread_id}/runs/{run_id}/workflow", response_model=WorkflowSnapshot)
-async def get_run_workflow(
-    thread_id: str,
-    run_id: str,
-    request: Request,
-    limit: int = Query(default=200, ge=1, le=500),
-    after_seq: int | None = Query(default=None),
-) -> WorkflowSnapshot:
-    service = get_run_service(request)
-    payload = await service.build_workflow(thread_id, run_id, limit=limit, after_seq=after_seq)
-    return WorkflowSnapshot(**payload)
-
-
-@router.post("/{thread_id}/runs/{run_id}/events", response_model=RunMessage)
-async def create_run_event(
-    thread_id: str,
-    run_id: str,
-    body: RunEventCreateRequest,
-    request: Request,
-) -> RunMessage:
-    service = get_run_service(request)
-    row = await service.record_external_event(
-        thread_id,
-        run_id,
-        event_type=body.event_type,
-        caller=body.caller,
-        content=body.content,
-    )
-    return RunMessage(**row)
-
-
-@router.post("/{thread_id}/runs/stream")
-async def stream_run(thread_id: str, body: RunCreateRequest, request: Request) -> StreamingResponse:
-    if body.run_id:
-        raise HTTPException(status_code=400, detail="run_id is not supported for /runs/stream")
-
-    service = get_run_service(request)
-    record = await service.start_run(thread_id, body)
     return StreamingResponse(
-        service.sse_consumer(record, request),
+        sse_consumer(bridge, record, request, run_mgr),
         media_type="text/event-stream",
         headers={
-            "Cache-Control": "no-cache, no-transform",
+            "Cache-Control": "no-cache",
             "Connection": "keep-alive",
             "X-Accel-Buffering": "no",
             "Content-Location": f"/api/threads/{thread_id}/runs/{record.run_id}",
@@ -162,94 +60,98 @@ async def stream_run(thread_id: str, body: RunCreateRequest, request: Request) -
     )
 
 
-@router.post("/{thread_id}/runs/wait")
-async def wait_run(thread_id: str, body: RunCreateRequest, request: Request) -> dict[str, Any]:
-    if body.run_id:
-        raise HTTPException(status_code=400, detail="run_id is not supported for /runs/wait")
+@router.post("/wait", response_model=dict)
+async def stateless_wait(body: RunCreateRequest, request: Request) -> dict:
+    """Create a run and block until completion.
 
-    service = get_run_service(request)
-    record = await service.start_run(thread_id, body)
+    If ``config.configurable.thread_id`` is provided, the run is created
+    on the given thread so that conversation history is preserved.
+    Otherwise a new temporary thread is created.
+    """
+    thread_id = _resolve_thread_id(body)
+    bridge = get_stream_bridge(request)
+    run_mgr = get_run_manager(request)
+    record = await start_run(body, thread_id, request)
+
+    completed = True
     if record.task is not None:
+        completed = await wait_for_run_completion(bridge, record, request, run_mgr)
+
+    if completed:
         try:
-            await record.task
-        except asyncio.CancelledError:
-            pass
-    updated = await service.require_run(thread_id, record.run_id)
-    return {"run": _record_to_response(updated).model_dump()}
+            accessor, config = build_checkpoint_state_accessor(
+                request,
+                thread_id=thread_id,
+                assistant_id=body.assistant_id,
+            )
+            snapshot = await accessor.aget(config)
+            snapshot_config = snapshot.config or {}
+            if snapshot_config.get("configurable", {}).get("checkpoint_id"):
+                return serialize_channel_values_for_api(snapshot.values)
+        except Exception:
+            logger.exception("Failed to fetch final state for run %s", record.run_id)
+
+    return {"status": record.status.value, "error": record.error}
 
 
-@router.post("/{thread_id}/runs/{run_id}/cancel")
-async def cancel_run(
-    thread_id: str,
+# ---------------------------------------------------------------------------
+# Run-scoped read endpoints
+# ---------------------------------------------------------------------------
+
+
+async def _resolve_run(run_id: str, request: Request) -> dict:
+    """Fetch run by run_id with user ownership check. Raises 404 if not found."""
+    run_store = get_run_store(request)
+    record = await run_store.get(run_id)  # user_id=AUTO filters by contextvar
+    if record is None:
+        raise HTTPException(status_code=404, detail=f"Run {run_id} not found")
+    return record
+
+
+@router.get("/{run_id}/messages")
+@require_permission("runs", "read")
+async def run_messages(
     run_id: str,
     request: Request,
-    action: Literal["interrupt", "rollback"] = Query(default="interrupt"),
-    wait: bool = Query(default=False),
-) -> Response:
-    service = get_run_service(request)
-    record = await service.cancel_run(thread_id, run_id, action=action)
-    if wait and record.task is not None:
-        try:
-            await record.task
-        except asyncio.CancelledError:
-            pass
-        return Response(status_code=204)
-    return Response(status_code=202)
+    limit: int = Query(default=50, le=200, ge=1),
+    before_seq: int | None = Query(default=None, ge=1),
+    after_seq: int | None = Query(default=None, ge=1),
+) -> dict:
+    """Return paginated messages for a run (cursor-based).
 
+    Pagination:
+    - after_seq: messages with seq > after_seq (forward)
+    - before_seq: messages with seq < before_seq (backward)
+    - neither: latest messages
 
-@router.get("/{thread_id}/runs/{run_id}/messages", response_model=RunMessagePage)
-async def get_run_messages(
-    thread_id: str,
-    run_id: str,
-    request: Request,
-    limit: int = Query(default=50, ge=1, le=200),
-    before_seq: int | None = Query(default=None),
-    after_seq: int | None = Query(default=None),
-) -> RunMessagePage:
-    service = get_run_service(request)
-    page = await service.list_run_messages(
-        thread_id,
+    Response: { data: [...], has_more: bool }
+    """
+    run = await _resolve_run(run_id, request)
+    event_store = get_run_event_store(request)
+    rows = await event_store.list_messages_by_run(
+        run["thread_id"],
         run_id,
-        limit=limit,
+        limit=limit + 1,
         before_seq=before_seq,
         after_seq=after_seq,
     )
-    return RunMessagePage(**page)
+    data, has_more = trim_run_message_page(rows, limit=limit, after_seq=after_seq)
+    return {"data": data, "has_more": has_more}
 
 
-@router.get("/{thread_id}/runs/{run_id}/feedback", response_model=FeedbackResponse | None)
-async def get_feedback(thread_id: str, run_id: str, request: Request) -> FeedbackResponse | None:
-    service = get_run_service(request)
-    feedback = await service.get_feedback(thread_id, run_id)
-    return FeedbackResponse(**feedback) if feedback else None
+@router.get("/{run_id}/feedback")
+@require_permission("runs", "read")
+async def run_feedback(run_id: str, request: Request) -> list[dict]:
+    """Return all feedback for a run."""
+    run = await _resolve_run(run_id, request)
+    feedback_repo = get_feedback_repo(request)
+    return await feedback_repo.list_by_run(run["thread_id"], run_id)
 
 
-@router.put("/{thread_id}/runs/{run_id}/feedback", response_model=FeedbackResponse)
-async def put_feedback(
-    thread_id: str,
-    run_id: str,
-    body: FeedbackRequest,
-    request: Request,
-) -> FeedbackResponse:
-    service = get_run_service(request)
-    feedback = await service.upsert_feedback(thread_id, run_id, rating=body.rating, comment=body.comment)
-    return FeedbackResponse(**feedback)
-
-
-@router.delete("/{thread_id}/runs/{run_id}/feedback", status_code=204)
-async def delete_feedback(thread_id: str, run_id: str, request: Request) -> Response:
-    service = get_run_service(request)
-    await service.delete_feedback(thread_id, run_id)
-    return Response(status_code=204)
-
-
-@router.post("/{thread_id}/runs/{run_id}/complete", include_in_schema=False, response_model=RunResponse)
-async def complete_run(
-    thread_id: str,
-    run_id: str,
-    body: RunCompletionRequest,
-    request: Request,
-) -> RunResponse:
-    service = get_run_service(request)
-    record = await service.complete_run(thread_id, run_id, status=RunStatus(body.status))
-    return _record_to_response(record)
+# Keep the old ``/api/threads/{thread_id}/runs`` surface available to embedded
+# Anaxa callers and existing local clients.  The active DeerFlow application
+# mounts ``stateless_router`` explicitly; this combined object is retained for
+# callers that include ``runs.router`` themselves (the historical API).
+router = APIRouter()
+router.include_router(stateless_router)
+router.include_router(legacy_router)

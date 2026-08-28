@@ -43,9 +43,7 @@ class RunManager:
     ) -> RunRecord:
         supported = {"reject", "interrupt", "rollback"}
         if multitask_strategy not in supported:
-            raise UnsupportedStrategyError(
-                f"Unsupported multitask strategy '{multitask_strategy}'. Supported: {', '.join(sorted(supported))}"
-            )
+            raise UnsupportedStrategyError(f"Unsupported multitask strategy '{multitask_strategy}'. Supported: {', '.join(sorted(supported))}")
 
         existing = await self.get(run_id) if run_id is not None else None
         if existing is not None:
@@ -54,11 +52,7 @@ class RunManager:
         run_id = run_id or str(uuid.uuid4())
         now = now_iso()
         async with self._lock:
-            inflight = [
-                record
-                for record in self._runs.values()
-                if record.thread_id == thread_id and record.status in {RunStatus.pending, RunStatus.running}
-            ]
+            inflight = [record for record in self._runs.values() if record.thread_id == thread_id and record.status in {RunStatus.pending, RunStatus.running}]
 
             if multitask_strategy == "reject" and inflight:
                 raise ConflictError(f"Thread {thread_id} already has an active run")

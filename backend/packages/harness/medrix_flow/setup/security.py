@@ -41,10 +41,7 @@ def get_allowed_setup_model_providers() -> set[str]:
 
 def validate_setup_model_provider(provider: str) -> None:
     if provider not in get_allowed_setup_model_providers():
-        raise ValueError(
-            f"Unsupported model provider '{provider}'. "
-            "Only built-in providers and providers already present in config.yaml are allowed."
-        )
+        raise ValueError(f"Unsupported model provider '{provider}'. Only built-in providers and providers already present in config.yaml are allowed.")
 
 
 def validate_optional_base_url(base_url: str | None) -> None:

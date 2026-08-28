@@ -35,9 +35,7 @@ class SQLiteRunStore(RunStore):
                 )
                 """
             )
-            await self._db.conn.execute(
-                "CREATE INDEX IF NOT EXISTS idx_runs_thread_id_created_at ON runs(thread_id, created_at DESC)"
-            )
+            await self._db.conn.execute("CREATE INDEX IF NOT EXISTS idx_runs_thread_id_created_at ON runs(thread_id, created_at DESC)")
             await self._db.conn.commit()
 
     async def put(

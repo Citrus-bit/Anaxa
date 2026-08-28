@@ -26,9 +26,7 @@ class SQLiteFeedbackRepo:
                 )
                 """
             )
-            await self._db.conn.execute(
-                "CREATE INDEX IF NOT EXISTS idx_feedback_thread_run ON feedback(thread_id, run_id)"
-            )
+            await self._db.conn.execute("CREATE INDEX IF NOT EXISTS idx_feedback_thread_run ON feedback(thread_id, run_id)")
             await self._db.conn.commit()
 
     async def get_by_run(self, *, thread_id: str, run_id: str) -> dict | None:

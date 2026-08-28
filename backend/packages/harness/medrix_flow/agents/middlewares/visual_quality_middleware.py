@@ -14,20 +14,25 @@ from medrix_flow.agents.thread_state import ThreadState
 logger = logging.getLogger(__name__)
 
 # File extensions that indicate visual output
-_VISUAL_EXTENSIONS = frozenset({
-    ".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp",  # images
-    ".pptx", ".ppt",                                     # presentations
-    ".pdf",                                               # documents/reports
-    ".html",                                              # charts (rendered)
-})
+_VISUAL_EXTENSIONS = frozenset(
+    {
+        ".png",
+        ".jpg",
+        ".jpeg",
+        ".gif",
+        ".svg",
+        ".webp",  # images
+        ".pptx",
+        ".ppt",  # presentations
+        ".pdf",  # documents/reports
+        ".html",  # charts (rendered)
+    }
+)
 
 
 def _has_visual_files(filepaths: list[str]) -> bool:
     """Check if any of the filepaths are visual output files."""
-    return any(
-        fp.lower().endswith(tuple(_VISUAL_EXTENSIONS))
-        for fp in filepaths
-    )
+    return any(fp.lower().endswith(tuple(_VISUAL_EXTENSIONS)) for fp in filepaths)
 
 
 class VisualQualityMiddleware(AgentMiddleware[ThreadState]):
@@ -77,10 +82,7 @@ class VisualQualityMiddleware(AgentMiddleware[ThreadState]):
             "`visual_quality_check` to verify design standards before presenting to the user."
         )
         if any(fp.lower().endswith((".pdf", ".tex")) for fp in filepaths):
-            reminder += (
-                " For LaTeX/PDF reports, also verify equations render correctly, symbols are legible, "
-                "and every figure is backed by validated local data or assets."
-            )
+            reminder += " For LaTeX/PDF reports, also verify equations render correctly, symbols are legible, and every figure is backed by validated local data or assets."
 
         # Append reminder to the messages in the Command update
         update = dict(result.update) if result.update else {}

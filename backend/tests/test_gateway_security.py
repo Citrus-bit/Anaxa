@@ -21,9 +21,7 @@ from medrix_flow.setup.service import (
 
 
 def _build_request(client_host: str, headers: dict[str, str] | None = None) -> Request:
-    request_headers = [
-        (name.lower().encode("latin-1"), value.encode("latin-1")) for name, value in (headers or {}).items()
-    ]
+    request_headers = [(name.lower().encode("latin-1"), value.encode("latin-1")) for name, value in (headers or {}).items()]
     scope = {
         "type": "http",
         "asgi": {"version": "3.0"},

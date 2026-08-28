@@ -3,6 +3,8 @@ from __future__ import annotations
 import base64
 import importlib.util
 import json
+import subprocess
+import sys
 from io import BytesIO
 from pathlib import Path
 
@@ -540,3 +542,35 @@ def test_generate_image_surfaces_openai_compatible_timeout(monkeypatch, tmp_path
 
     with pytest.raises(RuntimeError, match="timed out after 120 seconds"):
         module.generate_image(str(prompt_file), [], str(tmp_path / "out.png"))
+
+
+def test_image_generation_script_falls_back_to_deerflow_google_utility(monkeypatch):
+    del monkeypatch
+    repo_root = Path(__file__).resolve().parents[2]
+    script = repo_root / "skills" / "public" / "image-generation" / "scripts" / "generate.py"
+    probe = """
+import importlib.util
+import sys
+
+class BlockMedrixImports:
+    def find_spec(self, fullname, path=None, target=None):
+        if fullname == 'medrix_flow' or fullname.startswith('medrix_flow.'):
+            raise ModuleNotFoundError('blocked for namespace fallback test', name=fullname)
+        return None
+
+sys.meta_path.insert(0, BlockMedrixImports())
+spec = importlib.util.spec_from_file_location('image_generation_fallback_test', sys.argv[1])
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+print(module.google_image_utils.__name__)
+print(module.DEFAULT_DRAFT_MODEL)
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", probe, str(script)],
+        cwd=repo_root,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.splitlines() == ["deerflow.utils.google_image", "gemini-2.5-flash-image"]

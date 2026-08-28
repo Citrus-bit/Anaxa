@@ -1,21 +1,26 @@
 # API Reference
 
-This document provides a complete reference for the MedrixFlow backend APIs.
+This document provides a complete reference for the DeerFlow backend APIs.
 
 ## Overview
 
-MedrixFlow backend exposes two sets of APIs:
+DeerFlow backend exposes two sets of APIs:
 
-1. **LangGraph API** - Agent interactions, threads, and streaming (`/api/langgraph/*`)
+1. **LangGraph-compatible API** - Agent interactions, threads, and streaming (`/api/langgraph/*`)
 2. **Gateway API** - Models, MCP, skills, uploads, and artifacts (`/api/*`)
 
 All APIs are accessed through the Nginx reverse proxy at port 2026.
 
-## LangGraph API
+For agent conversations, clients can either pre-create a thread
+(`POST /api/langgraph/threads`) or start immediately with the stateless stream
+endpoint (`POST /api/langgraph/runs/stream`). The latter auto-creates a thread
+and returns `thread_id` and `run_id` in the response `Content-Location` header.
+
+## LangGraph-compatible API
 
 Base URL: `/api/langgraph`
 
-The LangGraph API is provided by the LangGraph server and follows the LangGraph SDK conventions.
+The public LangGraph-compatible API follows LangGraph SDK conventions. In the unified nginx deployment, Gateway owns `/api/langgraph/*` and translates those paths to its native `/api/*` run, thread, and streaming routers.
 
 ### Threads
 
@@ -86,6 +91,7 @@ Content-Type: application/json
     ]
   },
   "config": {
+    "recursion_limit": 100,
     "configurable": {
       "model_name": "gpt-4",
       "thinking_enabled": false,
@@ -97,8 +103,36 @@ Content-Type: application/json
 ```
 
 **Stream Mode Compatibility:**
-- Use: `values`, `messages-tuple`, `custom`, `updates`, `events`, `debug`, `tasks`, `checkpoints`
-- Do not use: `tools` (deprecated/invalid in current `langgraph-api` and will trigger schema validation errors)
+- Use: `values`, `messages-tuple`, `custom`, `updates`, `debug`, `tasks`, `checkpoints`
+- Unsupported modes, including `messages`, `events`, and `tools`, return `422` before a run is created. DeerFlow never substitutes `values` for an unsupported mode.
+
+**Run Option Compatibility:**
+- Supported concurrency strategies: `reject`, `rollback`, and `interrupt`
+- Compatibility default: `if_not_exists="create"`; this matches DeerFlow's current behavior
+- Artifact delivery is enforced automatically when a run creates or modifies regular files under `/mnt/user-data/outputs`. `present_files` must present at least one path produced by the current run (or a directory containing it), and the terminal receipt must be persisted; presenting only an unrelated file does not satisfy delivery. Runs without changed outputs retain ordinary conversational behavior. `artifact_delivery` is not a client-settable run option.
+- Unsupported options return `422`: `webhook`, `stream_resumable=true`, `after_seconds`, `feedback_keys`, any non-null `on_completion` value (including the SDK values `"complete"` and `"continue"`), `if_not_exists="reject"`, and `multitask_strategy="enqueue"`
+- `stream_resumable=false` is accepted: it is the LangGraph SDK's default and requests the non-resumable stream DeerFlow already serves
+- Undeclared SDK options, including `checkpoint_during` and `durability`, also return `422` instead of being silently discarded
+
+When outputs changed during the run, `run.delivery` events retain the Slice 1
+facts (`presented`, `paths`, and `by_tool`) and add `produced_paths`,
+`presented_paths`, `matched_paths`, plus an explicit verdict: `verification`,
+`stage` (`presented`, `mismatched`, or `not_started`), and `satisfied`. Receipts
+for runs without changed outputs keep their existing shape.
+
+**Recursion Limit:**
+
+`config.recursion_limit` caps the number of graph steps LangGraph will execute
+in a single run. The unified Gateway path defaults to `100` in
+`build_run_config` (see `backend/app/gateway/services.py`), which is a safer
+starting point for plan-mode or subagent-heavy runs. Clients can still set
+`recursion_limit` explicitly in the request body; increase it if you run deeply
+nested subagent graphs. Scheduled-task launches do not take a client body: they
+use `scheduler.recursion_limit` from `config.yaml` (default `1000`, matching
+the web UI). For safety, the Gateway clamps any supplied
+value to a configurable server ceiling (`max_recursion_limit` in `config.yaml`,
+default `1000`) so a single run cannot execute unbounded graph steps (runaway
+LLM cost / DoS); invalid or non-positive values fall back to the `100` default.
 
 **Configurable Options:**
 - `model_name` (string): Override the default model
@@ -147,6 +181,78 @@ Content-Type: application/json
 ```
 
 Same request body as Create Run. Returns SSE stream.
+
+#### Stateless Stream Run
+
+Start a conversation without creating a thread first. Gateway auto-creates a
+thread when `config.configurable.thread_id` is omitted, and returns both
+identifiers in the response `Content-Location` header.
+
+```http
+POST /api/langgraph/runs/stream
+Content-Type: application/json
+Accept: text/event-stream
+```
+
+Through Nginx, `/api/langgraph/runs/stream` is rewritten to the native Gateway
+path `POST /api/runs/stream`.
+
+**Request Body:** Same as [Create Run](#create-run). Omit `thread_id` to start a
+new conversation; include it to continue an existing one:
+
+```json
+{
+  "input": {
+    "messages": [
+      {
+        "role": "user",
+        "content": "Hello, can you help me?"
+      }
+    ]
+  },
+  "config": {
+    "recursion_limit": 100,
+    "configurable": {
+      "model_name": "gpt-4",
+      "thinking_enabled": false,
+      "is_plan_mode": false
+    }
+  },
+  "stream_mode": ["values", "messages-tuple", "custom"]
+}
+```
+
+**Response:** Server-Sent Events (SSE) stream with a `Content-Location` header:
+
+```http
+Content-Location: /api/threads/{thread_id}/runs/{run_id}
+```
+
+Clients should parse `thread_id` and `run_id` from this header (the path ends
+with `/runs/{run_id}`). Persist `thread_id` and send it back on the next turn
+via `config.configurable.thread_id` to keep conversation history.
+
+**Continuing a conversation:**
+
+```json
+{
+  "input": {
+    "messages": [
+      {
+        "role": "user",
+        "content": "What did I just ask?"
+      }
+    ]
+  },
+  "config": {
+    "configurable": {
+      "thread_id": "abc123",
+      "model_name": "gpt-4"
+    }
+  },
+  "stream_mode": ["values", "messages-tuple", "custom"]
+}
+```
 
 ---
 
@@ -218,10 +324,13 @@ Get current MCP server configurations.
 GET /api/mcp/config
 ```
 
+Requires an authenticated admin session. Sensitive env/header/OAuth secret
+values are masked in the response.
+
 **Response:**
 ```json
 {
-  "mcpServers": {
+  "mcp_servers": {
     "github": {
       "enabled": true,
       "type": "stdio",
@@ -231,13 +340,6 @@ GET /api/mcp/config
         "GITHUB_TOKEN": "***"
       },
       "description": "GitHub operations"
-    },
-    "filesystem": {
-      "enabled": false,
-      "type": "stdio",
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-filesystem"],
-      "description": "File system access"
     }
   }
 }
@@ -252,10 +354,15 @@ PUT /api/mcp/config
 Content-Type: application/json
 ```
 
+Requires an authenticated admin session. API-managed `stdio` MCP servers may
+only use allowed executable names for `command` (default: `npx`, `uvx`). Set
+`DEER_FLOW_MCP_STDIO_COMMAND_ALLOWLIST` to a comma-separated list when a
+deployment needs additional trusted launchers.
+
 **Request Body:**
 ```json
 {
-  "mcpServers": {
+  "mcp_servers": {
     "github": {
       "enabled": true,
       "type": "stdio",
@@ -273,8 +380,68 @@ Content-Type: application/json
 **Response:**
 ```json
 {
+  "mcp_servers": {
+    "github": {
+      "enabled": true,
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-github"],
+      "env": {
+        "GITHUB_TOKEN": "***"
+      },
+      "description": "GitHub operations"
+    }
+  }
+}
+```
+
+#### Update One MCP Server State
+
+Enable or disable one configured MCP server without replacing the full
+extensions configuration.
+
+```http
+PATCH /api/mcp/config
+Content-Type: application/json
+```
+
+Requires an authenticated admin session. Enabling a `stdio` server validates
+that server's `command` against the same allowlist used by the full `PUT`
+endpoint. Disabling a server does not require its command to be allowlisted, and
+invalid commands on other servers do not block the update. The endpoint
+preserves secrets, environment-variable placeholders, skills, custom server
+fields, and other top-level extensions config. SSE/HTTP targets may use either
+DeerFlow's `type` field or the MCP-spec `transport` field.
+
+**Request Body:**
+```json
+{
+  "server_name": "semantic-scholar",
+  "enabled": false
+}
+```
+
+The response is the full masked MCP configuration, matching `GET` and `PUT`.
+An unknown `server_name` returns `404`; attempting to enable a server with a
+disallowed `stdio` command returns `400`.
+
+#### Reset MCP Tools Cache
+
+Clear cached MCP tools and persistent MCP sessions process-wide. This affects
+all threads and users in the current Gateway process. Tools are loaded again
+from configured MCP servers on the next agent run or tool lookup.
+
+```http
+POST /api/mcp/cache/reset
+```
+
+Requires an authenticated admin session.
+
+**Response:**
+```json
+{
   "success": true,
-  "message": "MCP configuration updated"
+  "message": "MCP tools cache reset. Tools will reload on next use."
 }
 ```
 
@@ -385,6 +552,51 @@ Content-Type: multipart/form-data
 }
 ```
 
+#### Reload Skills
+
+Invalidate the skill prompt caches for every user in the current Gateway
+process. Subsequent runs rescan the configured public, custom, and legacy skill
+directories; runs that have already started keep their existing skill snapshot.
+
+```http
+POST /api/skills/reload
+```
+
+The request has no body and requires an authenticated administrator. For a
+cookie-authenticated request, send the CSRF cookie value in the matching header:
+
+```bash
+curl -X POST http://localhost:2026/api/skills/reload \
+  -b cookies.txt \
+  -H "X-CSRF-Token: <csrf_token-cookie-value>"
+```
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "scope": "process",
+  "message": "Skill caches invalidated; subsequent runs in this Gateway process will rescan the latest skills."
+}
+```
+
+`success` confirms cache invalidation, not that every file on disk was valid:
+malformed skills retain the existing parser behavior of being skipped and
+logged. The endpoint returns `401` for unauthenticated callers, `403` for
+non-admin users, and a generic `500` if the invalidation mechanism itself
+fails or the process-local background scan does not finish within the cache
+refresh timeout. A loader-level failure, such as an unavailable mounted root,
+does not publish an empty catalog: the last successfully loaded process cache
+remains available. A timed-out scan continues in its daemon worker and can
+still populate the process cache when it finishes.
+
+The scope is deliberately process-local. Each Uvicorn worker or Kubernetes Pod
+must be called directly; repeated requests through a load-balanced Service do
+not guarantee that every instance is reached. External MinIO/NFS/CSI writes
+bypass the validation, SkillScan, and history used by the install/edit APIs, so
+the mounted directory must be writable only by trusted operators.
+
 ### File Uploads
 
 #### Upload Files
@@ -407,11 +619,11 @@ Content-Type: multipart/form-data
     {
       "filename": "document.pdf",
       "size": 1234567,
-      "path": ".medrix-flow/threads/abc123/user-data/uploads/document.pdf",
+      "path": ".deer-flow/threads/abc123/user-data/uploads/document.pdf",
       "virtual_path": "/mnt/user-data/uploads/document.pdf",
       "artifact_url": "/api/threads/abc123/artifacts/mnt/user-data/uploads/document.pdf",
       "markdown_file": "document.md",
-      "markdown_path": ".medrix-flow/threads/abc123/user-data/uploads/document.md",
+      "markdown_path": ".deer-flow/threads/abc123/user-data/uploads/document.md",
       "markdown_virtual_path": "/mnt/user-data/uploads/document.md",
       "markdown_artifact_url": "/api/threads/abc123/artifacts/mnt/user-data/uploads/document.md"
     }
@@ -439,7 +651,7 @@ GET /api/threads/{thread_id}/uploads/list
     {
       "filename": "document.pdf",
       "size": 1234567,
-      "path": ".medrix-flow/threads/abc123/user-data/uploads/document.pdf",
+      "path": ".deer-flow/threads/abc123/user-data/uploads/document.pdf",
       "virtual_path": "/mnt/user-data/uploads/document.pdf",
       "artifact_url": "/api/threads/abc123/artifacts/mnt/user-data/uploads/document.pdf",
       "extension": ".pdf",
@@ -466,7 +678,7 @@ DELETE /api/threads/{thread_id}/uploads/{filename}
 
 ### Thread Cleanup
 
-Remove MedrixFlow-managed local thread files under `.medrix-flow/threads/{thread_id}` after the LangGraph thread itself has been deleted.
+Remove DeerFlow-managed local thread files under `.deer-flow/threads/{thread_id}` after the LangGraph thread itself has been deleted.
 
 ```http
 DELETE /api/threads/{thread_id}
@@ -525,14 +737,58 @@ All APIs return errors in a consistent format:
 
 ## Authentication
 
-Currently, MedrixFlow does not implement authentication. All APIs are accessible without credentials.
+DeerFlow supports four HTTP identity sources. They share the same thread/run isolation rules but differ in whether a row is created in `users` and how external identities are mapped. See [AUTH_DESIGN.md](AUTH_DESIGN.md) for the full design.
 
-Note: This is about MedrixFlow API authentication. MCP outbound connections can still use OAuth for configured HTTP/SSE MCP servers.
+| Model | Entry | `users` table | Isolation key |
+|---|---|---|---|
+| Browser session | `access_token` cookie after login/register | Yes | `users.id` |
+| OIDC / SSO | OAuth callback → cookie | Yes | `users.id` (see [SSO.md](SSO.md)) |
+| IM channel binding | Connect code + `channel_connections` | Bound to registered user | `channel_connections.owner_user_id` |
+| **Internal Auth** | `X-DeerFlow-Internal-Token` + `X-DeerFlow-Owner-User-Id` | **No** | Owner string on `threads_meta.user_id` |
 
-For production deployments, it is recommended to:
-1. Use Nginx for basic auth or OAuth integration
-2. Deploy behind a VPN or private network
-3. Implement custom authentication middleware
+**IM channel binding** and **Internal Auth** are both *platform-trust* integrations: DeerFlow trusts the channel/platform to authenticate end users. IM bindings persist the mapping in `channel_connections` / `channel_conversations` and require a DeerFlow `users` row. Internal Auth lets a platform call the Gateway API directly with a deployment-shared token and a per-request owner header—no `users` row, but thread/run/checkpoint isolation works the same way.
+
+### Browser session (default)
+
+DeerFlow enforces authentication for all non-public HTTP routes. Public routes are limited to health/docs metadata and these public auth endpoints:
+
+- `POST /api/v1/auth/initialize` creates the first admin account when no admin exists.
+- `POST /api/v1/auth/login/local` logs in with email/password and sets an HttpOnly `access_token` cookie.
+- `POST /api/v1/auth/register` creates a regular `user` account and sets the session cookie.
+- `POST /api/v1/auth/logout` clears the session cookie.
+- `GET /api/v1/auth/setup-status` reports whether the first admin still needs to be created.
+
+The authenticated auth endpoints are:
+
+- `GET /api/v1/auth/me` returns the current user.
+- `POST /api/v1/auth/change-password` changes password, optionally changes email during setup, increments `token_version`, and reissues the cookie.
+
+Protected state-changing requests also require the CSRF double-submit token: send the `csrf_token` cookie value as the `X-CSRF-Token` header. Login/register/initialize/logout are bootstrap auth endpoints: they are exempt from the double-submit token but still reject hostile browser `Origin` headers.
+
+User isolation is enforced from the authenticated user context:
+
+- Thread metadata is scoped by `threads_meta.user_id`; search/read/write/delete APIs only expose the current user's threads.
+- Thread files live under `{base_dir}/users/{user_id}/threads/{thread_id}/user-data/` and are exposed inside the sandbox as `/mnt/user-data/`.
+- Memory and custom agents are stored under `{base_dir}/users/{user_id}/...`.
+
+Note: MCP outbound connections can still use OAuth for configured HTTP/SSE MCP servers; that is separate from DeerFlow API authentication.
+
+### Internal Auth (platform HTTP integration)
+
+For server-to-server integrations (e.g. a Feishu or WeCom/Enterprise WeChat bot backend), configure:
+
+```bash
+export DEER_FLOW_INTERNAL_AUTH_TOKEN="<long-random-secret>"
+```
+
+| Header | Required | Description |
+|---|---|---|
+| `X-DeerFlow-Internal-Token` | Yes | Must match `DEER_FLOW_INTERNAL_AUTH_TOKEN`; missing/invalid → `401` |
+| `X-DeerFlow-Owner-User-Id` | Yes for per-user isolation | Platform user id (e.g. `feishu_ou_alice`, `wecom_user_bob`); omit → `default` bucket |
+
+Does **not** use browser cookies or CSRF tokens. Does **not** insert into `users`; sets `threads_meta.user_id` / `runs.user_id` from the owner header. DeerFlow validates only the platform token—not whether the owner id represents a real end user; user validity is entirely the platform's responsibility. See [AUTH_DESIGN.md — Internal Auth](AUTH_DESIGN.md#internal-auth-direct-http) for trust boundaries, persistence, and security notes.
+
+Use the standard Gateway thread/run endpoints (`POST /api/threads`, `POST /api/threads/{thread_id}/runs/stream`, etc.) with the headers above on every request.
 
 ---
 
@@ -551,13 +807,52 @@ location /api/ {
 
 ---
 
-## WebSocket Support
+## Streaming Support
 
-The LangGraph server supports WebSocket connections for real-time streaming. Connect to:
+Gateway's LangGraph-compatible API streams run events with Server-Sent Events (SSE).
+
+**Thread-scoped streaming** (thread must exist):
+
+```http
+POST /api/langgraph/threads/{thread_id}/runs/stream
+Accept: text/event-stream
+```
+
+**Stateless streaming** (no pre-created thread; Gateway auto-creates one):
+
+```http
+POST /api/langgraph/runs/stream
+Accept: text/event-stream
+```
+
+Both endpoints return `Content-Location: /api/threads/{thread_id}/runs/{run_id}`.
+The DeerFlow web UI and LangGraph SDK clients rely on this header to discover the
+assigned `thread_id` and `run_id` on the first message of a new chat.
+
+### SSE replay retention and gaps
+
+Clients may reconnect to a run stream with `Last-Event-ID`. Replay history is
+bounded by `stream_bridge.queue_maxsize` (default `256`) and, for Redis, by the
+rolling `stream_ttl_seconds`. A retained cursor resumes after that event with no
+additional control frame.
+
+When a syntactically valid cursor is older than the retained watermark, the
+server sends exactly one `gap` event before any retained data and closes that
+subscription without an `end` event:
+
+```text
+event: gap
+data: {"code":"stream_replay_gap","run_id":"run-123","requested_event_id":"1718000000000-1","earliest_available_event_id":"1718000000100-42","latest_available_event_id":"1718000000200-84","recovery":"reload_durable_state"}
 
 ```
-ws://localhost:2026/api/langgraph/threads/{thread_id}/runs/stream
-```
+
+The frame deliberately has no SSE `id:`. Consumers must reload durable thread
+state and persisted run events/messages, then may reconnect from
+`latest_available_event_id` to follow newer live events. A gap does not cancel
+the active run. The same signal applies when a no-cursor subscriber has already
+established an empty-stream wait but the first Redis wake-up falls behind before
+delivery; in that case `requested_event_id` is `null`. Malformed cursor handling
+is backend-specific and is not the same as a valid cursor that was evicted.
 
 ---
 
@@ -569,17 +864,50 @@ ws://localhost:2026/api/langgraph/threads/{thread_id}/runs/stream
 from langgraph_sdk import get_client
 
 client = get_client(url="http://localhost:2026/api/langgraph")
+run_meta: dict[str, str] = {}
 
-# Create thread
+
+def on_run_created(meta) -> None:
+    # langgraph-sdk 0.3.x parses Content-Location only when this callback is set.
+    if meta.thread_id:
+        run_meta["thread_id"] = meta.thread_id
+    run_meta["run_id"] = meta.run_id
+
+
+# Option A: stateless stream — no thread pre-creation
+# Gateway auto-creates a thread and returns thread_id/run_id in Content-Location.
+async for event in client.runs.stream(
+    None,
+    "lead_agent",
+    input={"messages": [{"role": "user", "content": "Hello"}]},
+    config={"configurable": {"model_name": "gpt-4"}},
+    stream_mode=["values", "messages-tuple", "custom"],
+    on_run_created=on_run_created,
+):
+    print(event)
+
+thread_id = run_meta["thread_id"]  # persist before the next turn
+
+# Option A (continued): same thread on the next turn
+async for event in client.runs.stream(
+    None,
+    "lead_agent",
+    input={"messages": [{"role": "user", "content": "What did I just ask?"}]},
+    config={"configurable": {"thread_id": thread_id, "model_name": "gpt-4"}},
+    stream_mode=["values", "messages-tuple", "custom"],
+    on_run_created=on_run_created,
+):
+    print(event)
+
+# Option B: thread-scoped stream — create thread first, then stream
 thread = await client.threads.create()
-
-# Run agent
 async for event in client.runs.stream(
     thread["thread_id"],
     "lead_agent",
     input={"messages": [{"role": "user", "content": "Hello"}]},
     config={"configurable": {"model_name": "gpt-4"}},
     stream_mode=["values", "messages-tuple", "custom"],
+    on_run_created=on_run_created,
 ):
     print(event)
 ```
@@ -592,13 +920,60 @@ const response = await fetch('/api/models');
 const data = await response.json();
 console.log(data.models);
 
-// Using EventSource for streaming
-const eventSource = new EventSource(
-  `/api/langgraph/threads/${threadId}/runs/stream`
-);
-eventSource.onmessage = (event) => {
-  console.log(JSON.parse(event.data));
-};
+function parseRunLocation(contentLocation: string | null) {
+  if (!contentLocation) return null;
+  const match = /\/threads\/([^/]+)\/runs\/([^/]+)/.exec(contentLocation);
+  if (!match) return null;
+  return { threadId: match[1], runId: match[2] };
+}
+
+// Option A: stateless stream — no thread pre-creation
+let threadId: string | undefined;
+const firstResponse = await fetch("/api/langgraph/runs/stream", {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+    Accept: "text/event-stream",
+  },
+  body: JSON.stringify({
+    input: { messages: [{ role: "user", content: "Hello" }] },
+    stream_mode: ["values", "messages-tuple", "custom"],
+  }),
+});
+
+const created = parseRunLocation(firstResponse.headers.get("Content-Location"));
+threadId = created?.threadId;
+console.log("thread_id:", created?.threadId, "run_id:", created?.runId);
+
+// Option B: continue the same thread on the next turn
+const followUpResponse = await fetch("/api/langgraph/runs/stream", {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+    Accept: "text/event-stream",
+  },
+  body: JSON.stringify({
+    input: { messages: [{ role: "user", content: "What did I just ask?" }] },
+    config: { configurable: { thread_id: threadId } },
+    stream_mode: ["values", "messages-tuple", "custom"],
+  }),
+});
+
+// Option C: thread-scoped stream when you already have a thread_id
+const streamResponse = await fetch(`/api/langgraph/threads/${threadId}/runs/stream`, {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+    Accept: "text/event-stream",
+  },
+  body: JSON.stringify({
+    input: { messages: [{ role: "user", content: "Hello" }] },
+    stream_mode: ["values", "messages-tuple", "custom"],
+  }),
+});
+
+const reader = streamResponse.body?.getReader();
+// Decode and parse SSE frames from reader in your client code.
 ```
 
 ### cURL Examples
@@ -617,15 +992,52 @@ curl -X POST http://localhost:2026/api/threads/abc123/uploads \
 # Enable skill
 curl -X POST http://localhost:2026/api/skills/pdf-processing/enable
 
-# Create thread and run agent
+# Stateless stream — no thread pre-creation
+curl -s -D - -N -X POST http://localhost:2026/api/langgraph/runs/stream \
+  -H "Content-Type: application/json" \
+  -H "Accept: text/event-stream" \
+  -d '{
+    "input": {"messages": [{"role": "user", "content": "Hello"}]},
+    "config": {
+      "recursion_limit": 100,
+      "configurable": {"model_name": "gpt-4"}
+    },
+    "stream_mode": ["values", "messages-tuple", "custom"]
+  }'
+# Read Content-Location: /api/threads/{thread_id}/runs/{run_id} from the headers.
+
+# Continue the same thread on the next turn
+curl -s -N -X POST http://localhost:2026/api/langgraph/runs/stream \
+  -H "Content-Type: application/json" \
+  -H "Accept: text/event-stream" \
+  -d '{
+    "input": {"messages": [{"role": "user", "content": "What did I just ask?"}]},
+    "config": {
+      "configurable": {"thread_id": "abc123", "model_name": "gpt-4"}
+    },
+    "stream_mode": ["values", "messages-tuple", "custom"]
+  }'
+
+# Thread-scoped flow — create thread first, then stream
 curl -X POST http://localhost:2026/api/langgraph/threads \
   -H "Content-Type: application/json" \
   -d '{}'
 
-curl -X POST http://localhost:2026/api/langgraph/threads/abc123/runs \
+curl -X POST http://localhost:2026/api/langgraph/threads/abc123/runs/stream \
   -H "Content-Type: application/json" \
+  -H "Accept: text/event-stream" \
   -d '{
     "input": {"messages": [{"role": "user", "content": "Hello"}]},
-    "config": {"configurable": {"model_name": "gpt-4"}}
+    "config": {
+      "recursion_limit": 100,
+      "configurable": {"model_name": "gpt-4"}
+    },
+    "stream_mode": ["values", "messages-tuple", "custom"]
   }'
 ```
+
+> The unified Gateway path defaults `config.recursion_limit` to 100 for
+> plan-mode and subagent-heavy runs. Clients may still set
+> `config.recursion_limit` explicitly — see the [Create Run](#create-run)
+> section for details. Scheduled-task launches use
+> `scheduler.recursion_limit` from `config.yaml` instead of a client body.

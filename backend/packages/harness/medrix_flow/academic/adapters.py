@@ -35,8 +35,7 @@ logger = logging.getLogger(__name__)
 class AcademicSourceAdapter(Protocol):
     name: str
 
-    async def search(self, query: str, *, project_id: str, limit: int) -> list[PaperRecord]:
-        ...
+    async def search(self, query: str, *, project_id: str, limit: int) -> list[PaperRecord]: ...
 
 
 class HTTPAcademicAdapter:
@@ -92,31 +91,31 @@ class HTTPAcademicAdapter:
         )
         return hydrate_quality_metadata(
             PaperRecord(
-            paper_id=f"{project_id}:{provider}:{provider_id or canonical_id}",
-            project_id=project_id,
-            canonical_id=canonical_id,
-            title=title_text,
-            authors=authors,
-            year=year,
-            venue=venue,
-            abstract=abstract_text,
-            doi=normalize_doi(doi),
-            pmid=normalize_pmid(pmid),
-            pmcid=normalize_pmid(pmcid),
-            arxiv_id=normalize_arxiv_id(arxiv_id),
-            cited_by_count=cited_by_count,
-            provider=provider,
-            provider_id=provider_id,
-            source_url=source_url,
-            oa_url=oa_url,
-            metadata_only=metadata_only,
-            keywords=extract_keywords(title_text, abstract_text),
-            methods=infer_method_tags(title_text, abstract_text),
-            populations=infer_population_tags(title_text, abstract_text),
-            conflict_flags=infer_conflict_flags(title_text, abstract_text),
-            raw_source=raw_source or {},
-            created_at=created_at,
-            updated_at=created_at,
+                paper_id=f"{project_id}:{provider}:{provider_id or canonical_id}",
+                project_id=project_id,
+                canonical_id=canonical_id,
+                title=title_text,
+                authors=authors,
+                year=year,
+                venue=venue,
+                abstract=abstract_text,
+                doi=normalize_doi(doi),
+                pmid=normalize_pmid(pmid),
+                pmcid=normalize_pmid(pmcid),
+                arxiv_id=normalize_arxiv_id(arxiv_id),
+                cited_by_count=cited_by_count,
+                provider=provider,
+                provider_id=provider_id,
+                source_url=source_url,
+                oa_url=oa_url,
+                metadata_only=metadata_only,
+                keywords=extract_keywords(title_text, abstract_text),
+                methods=infer_method_tags(title_text, abstract_text),
+                populations=infer_population_tags(title_text, abstract_text),
+                conflict_flags=infer_conflict_flags(title_text, abstract_text),
+                raw_source=raw_source or {},
+                created_at=created_at,
+                updated_at=created_at,
             )
         )
 
@@ -383,7 +382,7 @@ def _first_text(value) -> str | None:
 
 def _crossref_year(item: dict) -> int | None:
     for key in ("published-print", "published-online", "created"):
-        date_parts = ((item.get(key) or {}).get("date-parts") or [])
+        date_parts = (item.get(key) or {}).get("date-parts") or []
         if date_parts and isinstance(date_parts[0], list) and date_parts[0]:
             year = date_parts[0][0]
             if isinstance(year, int):
@@ -649,12 +648,7 @@ class ACLAnthologyAdapter(HTTPAcademicAdapter):
         for item in payload.get("results", []):
             source = item.get("primary_location", {}).get("source", {}) or {}
             source_name = normalize_whitespace(source.get("display_name"))
-            source_url = (
-                (item.get("best_oa_location") or {}).get("landing_page_url")
-                or (item.get("best_oa_location") or {}).get("pdf_url")
-                or item.get("doi")
-                or item.get("id")
-            )
+            source_url = (item.get("best_oa_location") or {}).get("landing_page_url") or (item.get("best_oa_location") or {}).get("pdf_url") or item.get("doi") or item.get("id")
             if not _looks_like_acl_family(source_name, source_url):
                 continue
             title = item.get("display_name") or item.get("title") or ""
@@ -719,10 +713,7 @@ class PubMedAdapter(HTTPAcademicAdapter):
                 id_list = (search_resp.json().get("esearchresult") or {}).get("idlist", [])
                 if not id_list:
                     return []
-                summary_url = (
-                    "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?"
-                    + urlencode({"db": "pubmed", "retmode": "json", "id": ",".join(id_list)})
-                )
+                summary_url = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?" + urlencode({"db": "pubmed", "retmode": "json", "id": ",".join(id_list)})
                 summary_resp = await client.get(summary_url)
                 summary_resp.raise_for_status()
                 payload = summary_resp.json()

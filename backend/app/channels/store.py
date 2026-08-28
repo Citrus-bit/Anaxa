@@ -1,4 +1,4 @@
-"""ChannelStore — persists IM chat-to-MedrixFlow thread mappings."""
+"""ChannelStore — persists IM chat-to-DeerFlow thread mappings."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 class ChannelStore:
-    """JSON-file-backed store that maps IM conversations to MedrixFlow threads.
+    """JSON-file-backed store that maps IM conversations to DeerFlow threads.
 
     Data layout (on disk)::
 
@@ -35,7 +35,7 @@ class ChannelStore:
 
     def __init__(self, path: str | Path | None = None) -> None:
         if path is None:
-            from medrix_flow.config.paths import get_paths
+            from deerflow.config.paths import get_paths
 
             path = Path(get_paths().base_dir) / "channels" / "store.json"
         self._path = Path(path)
@@ -80,7 +80,7 @@ class ChannelStore:
     # -- public API --------------------------------------------------------
 
     def get_thread_id(self, channel_name: str, chat_id: str, topic_id: str | None = None) -> str | None:
-        """Look up the MedrixFlow thread_id for a given IM conversation/topic."""
+        """Look up the DeerFlow thread_id for a given IM conversation/topic."""
         entry = self._data.get(self._key(channel_name, chat_id, topic_id))
         return entry["thread_id"] if entry else None
 

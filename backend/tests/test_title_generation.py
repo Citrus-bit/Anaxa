@@ -2,8 +2,8 @@
 
 import pytest
 
-from medrix_flow.agents.middlewares.title_middleware import TitleMiddleware
-from medrix_flow.config.title_config import TitleConfig, get_title_config, set_title_config
+from deerflow.agents.middlewares.title_middleware import TitleMiddleware
+from deerflow.config.title_config import TitleConfig, get_title_config, set_title_config
 
 
 class TestTitleConfig:
@@ -14,7 +14,7 @@ class TestTitleConfig:
         config = TitleConfig()
         assert config.enabled is True
         assert config.max_words == 6
-        assert config.max_chars == 90
+        assert config.max_chars == 60
         assert config.model_name is None
 
     def test_custom_config(self):

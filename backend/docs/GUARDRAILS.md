@@ -1,6 +1,6 @@
 # Guardrails: Pre-Tool-Call Authorization
 
-> **Context:** [Issue #1213](https://github.com/Citrus-bit/medrix-flow/issues/1213) — MedrixFlow has Docker sandboxing and human approval via `ask_clarification`, but no deterministic, policy-driven authorization layer for tool calls. An agent running autonomous multi-step tasks can execute any loaded tool with any arguments. Guardrails add a middleware that evaluates every tool call against a policy **before** execution.
+> **Context:** [Issue #1213](https://github.com/bytedance/deer-flow/issues/1213) — DeerFlow has Docker sandboxing and human approval via `ask_clarification`, but no deterministic, policy-driven authorization layer for tool calls. An agent running autonomous multi-step tasks can execute any loaded tool with any arguments. Guardrails add a middleware that evaluates every tool call against a policy **before** execution.
 
 ## Why Guardrails
 
@@ -82,14 +82,14 @@ The `GuardrailMiddleware` implements `wrap_tool_call` / `awrap_tool_call` (the s
 
 ### Option 1: Built-in AllowlistProvider (Zero Dependencies)
 
-The simplest option. Ships with MedrixFlow. Block or allow tools by name. No external packages, no passport, no network.
+The simplest option. Ships with DeerFlow. Block or allow tools by name. No external packages, no passport, no network.
 
 **config.yaml:**
 ```yaml
 guardrails:
   enabled: true
   provider:
-    use: medrix_flow.guardrails.builtin:AllowlistProvider
+    use: deerflow.guardrails.builtin:AllowlistProvider
     config:
       denied_tools: ["bash", "write_file"]
 ```
@@ -101,20 +101,20 @@ You can also use an allowlist (only these tools are permitted):
 guardrails:
   enabled: true
   provider:
-    use: medrix_flow.guardrails.builtin:AllowlistProvider
+    use: deerflow.guardrails.builtin:AllowlistProvider
     config:
       allowed_tools: ["web_search", "read_file", "ls"]
 ```
 
 **Try it:**
 1. Add the config above to your `config.yaml`
-2. Start MedrixFlow: `make dev`
+2. Start DeerFlow: `make dev`
 3. Ask the agent: "Use bash to run echo hello"
 4. The agent sees: `Guardrail denied: tool 'bash' was blocked (oap.tool_not_allowed)`
 
 ### Option 2: OAP Passport Provider (Policy-Based)
 
-For policy enforcement based on the [Open Agent Passport (OAP)](https://github.com/aporthq/aport-spec) open standard. An OAP passport is a JSON document that declares an agent's identity, capabilities, and operational limits. Any provider that reads an OAP passport and returns OAP-compliant decisions works with MedrixFlow.
+For policy enforcement based on the [Open Agent Passport (OAP)](https://github.com/aporthq/aport-spec) open standard. An OAP passport is a JSON document that declares an agent's identity, capabilities, and operational limits. Any provider that reads an OAP passport and returns OAP-compliant decisions works with DeerFlow.
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -156,12 +156,12 @@ An OAP passport is just a JSON file. You can create one by hand following the [O
 
 ```bash
 pip install aport-agent-guardrails
-aport setup --framework medrix_flow
+aport setup --framework deerflow
 ```
 
 This creates:
-- `~/.aport/medrix_flow/config.yaml` -- evaluator config (local or API mode)
-- `~/.aport/medrix_flow/aport/passport.json` -- OAP passport with capabilities and limits
+- `~/.aport/deerflow/config.yaml` -- evaluator config (local or API mode)
+- `~/.aport/deerflow/aport/passport.json` -- OAP passport with capabilities and limits
 
 **config.yaml (using APort as the provider):**
 ```yaml
@@ -181,7 +181,7 @@ guardrails:
       passport_path: ./my-passport.json
 ```
 
-Any provider that accepts `framework` as a kwarg and implements `evaluate`/`aevaluate` works. The OAP standard defines the passport format and decision codes; MedrixFlow doesn't care which provider reads them.
+Any provider that accepts `framework` as a kwarg and implements `evaluate`/`aevaluate` works. The OAP standard defines the passport format and decision codes; DeerFlow doesn't care which provider reads them.
 
 **What the passport controls:**
 
@@ -201,11 +201,11 @@ OAP providers may support different evaluation modes. For example, the APort ref
 | **Local** | Evaluates passport locally (bash script). | None | ~300ms |
 | **API** | Sends passport + context to a hosted evaluator. Signed decisions. | Yes | ~65ms |
 
-A custom OAP provider can implement any evaluation strategy -- the MedrixFlow middleware doesn't care how the provider reaches its decision.
+A custom OAP provider can implement any evaluation strategy -- the DeerFlow middleware doesn't care how the provider reaches its decision.
 
 **Try it:**
 1. Install and set up as above
-2. Start MedrixFlow and ask: "Create a file called test.txt with content hello"
+2. Start DeerFlow and ask: "Create a file called test.txt with content hello"
 3. Then ask: "Now delete it using bash rm -rf"
 4. Guardrail blocks it: `oap.blocked_pattern: Command contains blocked pattern: rm -rf`
 
@@ -220,7 +220,7 @@ class MyGuardrailProvider:
     name = "my-company"
 
     def evaluate(self, request):
-        from medrix_flow.guardrails.provider import GuardrailDecision, GuardrailReason
+        from deerflow.guardrails.provider import GuardrailDecision, GuardrailReason
 
         # Example: block any bash command containing "delete"
         if request.tool_name == "bash" and "delete" in str(request.tool_input):
@@ -232,6 +232,8 @@ class MyGuardrailProvider:
         return GuardrailDecision(allow=True, reasons=[GuardrailReason(code="oap.allowed")])
 
     async def aevaluate(self, request):
+        # This skeleton reuses the sync path. If policy evaluation performs
+        # async I/O, call and await the async evaluator here instead.
         return self.evaluate(request)
 ```
 
@@ -248,8 +250,187 @@ Make sure `my_guardrail.py` is on the Python path (e.g. in the backend directory
 **Try it:**
 1. Create `my_guardrail.py` in the backend directory
 2. Add the config
-3. Start MedrixFlow and ask: "Use bash to delete test.txt"
+3. Start DeerFlow and ask: "Use bash to delete test.txt"
 4. Your provider blocks it
+
+#### Optional: Runtime Attribution
+
+Runtime attribution fields are optional. Providers that need richer policy context or audit records can read them, while simple tool allow/deny providers can ignore them:
+
+| Field | Example use |
+|---|---|
+| `user_id` | Attach the authenticated DeerFlow user to a provider-side policy or audit record |
+| `user_role` | Apply simple role-based policy, such as allowing an admin-only tool. Sourced from the authenticated user's `system_role` (renamed for the guardrail-facing surface, not a separate field) |
+| `oauth_provider` | Link a decision to an external identity provider, when present |
+| `oauth_id` | Link a decision to the external provider's subject/user id, when present |
+| `thread_id` | Link a decision back to the conversation thread |
+| `run_id` | Link a decision back to one execution run |
+| `tool_call_id` | Identify the exact tool call that was allowed or denied |
+
+These fields are populated by the Gateway from server-side auth state (the run worker always sets `thread_id`/`run_id`). For web-authenticated runs, `inject_authenticated_user_context` writes `user_id`/`user_role`/`oauth_provider`/`oauth_id` from `request.state.user`. For trusted IM / internal-auth runs (Slack, Discord, Telegram, Feishu, DingTalk, and other internal callers that provide a trusted owner header), the Gateway resolves the owner user server-side and writes the same attribution fields from that owner. Client-supplied values cannot override them — the server-side assignment wins.
+
+If a trusted internal caller does not resolve to an owner user, the Gateway strips client-supplied `user_role`/`oauth_provider`/`oauth_id` from the run context instead of treating them as authoritative. Any `user_id` already present is left in place for legacy channel storage behavior, but role/oauth-based policy is only applied when the owner user was resolved server-side.
+
+For example, if your deployment has user-scoped policy requirements, you can opt into a context-aware provider that passes the runtime fields into an external policy file. This keeps business policy out of Python code and `config.yaml`; the provider only normalizes context, evaluates a configured policy, and maps the result back to `GuardrailDecision`.
+
+```python
+import asyncio
+import json
+from pathlib import Path
+
+from deerflow.guardrails.provider import GuardrailDecision, GuardrailReason
+
+
+class ContextAwareGuardrailProvider:
+    """Illustrative provider skeleton; policy loading/evaluation is provider-defined."""
+
+    name = "context-aware-example"
+
+    def __init__(self, *, policy_path, audit_path="./logs/guardrail-audit.jsonl", **kwargs):
+        self.policy_path = Path(policy_path)
+        self.audit_path = Path(audit_path)
+        # Load policy rules here. In a real deployment this could call an
+        # internal policy service, OPA/Cedar, AGT, or another rule engine.
+        self.policy = self._load_policy(self.policy_path)
+
+    def evaluate(self, request):
+        decision = self._decide(request)
+        self._write_audit(request, decision)
+        return decision
+
+    async def aevaluate(self, request):
+        # ``_decide`` is in-memory policy work; the audit write is blocking
+        # file I/O, so offload it off the event loop with ``asyncio.to_thread``
+        # (DeerFlow enforces a blocking-IO gate in CI). If your policy
+        # evaluation itself does blocking I/O — external policy service, file
+        # read per call — move that behind ``asyncio.to_thread`` too, or
+        # implement a native async evaluator and await it here.
+        decision = self._decide(request)
+        await asyncio.to_thread(self._write_audit, request, decision)
+        return decision
+
+    def _decide(self, request):
+        # 1. Normalize DeerFlow request data into policy context.
+        context = {
+            "tool_name": request.tool_name,
+            "tool_input": request.tool_input,
+            "user_id": request.user_id,
+            "user_role": request.user_role,
+            "oauth_provider": request.oauth_provider,
+            "oauth_id": request.oauth_id,
+            "thread_id": request.thread_id,
+            "run_id": request.run_id,
+            "tool_call_id": request.tool_call_id,
+            "agent_id": request.agent_id,
+            "timestamp": request.timestamp,
+            # Derived fields make simple rule engines handle multi-field checks.
+            # Example policy: allow bash only for admin users.
+            "role_tool_key": f"{request.user_role or ''}:{request.tool_name}",
+            "command": request.tool_input.get("command", ""),
+            "message": json.dumps(request.tool_input, ensure_ascii=False, default=str),
+        }
+
+        # 2. Evaluate the provider-defined policy schema.
+        result = self._evaluate_policy(self.policy, context)
+
+        # 3. Convert the policy result back to DeerFlow's decision object.
+        return GuardrailDecision(
+            allow=result["allow"],
+            reasons=[
+                GuardrailReason(
+                    code=result["code"],
+                    message=result["message"],
+                )
+            ],
+            policy_id=result.get("policy_id"),
+            metadata={
+                "user_id": request.user_id,
+                "user_role": request.user_role,
+                "oauth_provider": request.oauth_provider,
+                "oauth_id": request.oauth_id,
+                "thread_id": request.thread_id,
+                "run_id": request.run_id,
+                "tool_call_id": request.tool_call_id,
+            },
+        )
+
+    def _write_audit(self, request, decision):
+        event = {
+            "decision": "allow" if decision.allow else "deny",
+            "reason": decision.reasons[0].message if decision.reasons else "",
+            "policy_id": decision.policy_id,
+            "tool_name": request.tool_name,
+            "user_id": request.user_id,
+            "user_role": request.user_role,
+            "oauth_provider": request.oauth_provider,
+            "oauth_id": request.oauth_id,
+            "thread_id": request.thread_id,
+            "run_id": request.run_id,
+            "tool_call_id": request.tool_call_id,
+            "agent_id": request.agent_id,
+            "timestamp": request.timestamp,
+        }
+        self.audit_path.parent.mkdir(parents=True, exist_ok=True)
+        with self.audit_path.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(event, ensure_ascii=False) + "\n")
+
+    def _load_policy(self, path):
+        # Load your provider-defined policy file.
+        raise NotImplementedError
+
+    def _evaluate_policy(self, policy, context):
+        # Evaluate ordered rules and return:
+        # {"allow": bool, "code": str, "message": str, "policy_id": str | None}
+        raise NotImplementedError
+```
+
+**config.yaml:**
+```yaml
+guardrails:
+  enabled: true
+  provider:
+    use: my_guardrail:ContextAwareGuardrailProvider
+    config:
+      policy_path: ./policies/guardrail-policy.yml
+      audit_path: ./logs/guardrail-audit.jsonl
+```
+
+Many policy engines use a similar shape: normalize request context, evaluate ordered rules, and return an allow/deny decision. The exact schema is provider-defined; the YAML below is illustrative:
+
+```yaml
+# policies/guardrail-policy.yml
+version: "1.0"
+rules:
+  - name: allow-admin-bash
+    condition:
+      field: role_tool_key
+      operator: eq
+      value: admin:bash
+    action: allow
+    priority: 300
+    message: Admin users may execute bash
+
+  - name: deny-bash-for-other-roles
+    condition:
+      field: tool_name
+      operator: eq
+      value: bash
+    action: deny
+    priority: 200
+    message: bash is restricted to admin users
+
+  - name: deny-dangerous-command
+    condition:
+      field: message
+      operator: matches
+      value: "\\brm\\s+-rf\\b"
+    action: deny
+    priority: 100
+    message: Dangerous shell command detected
+
+defaults:
+  action: allow
+```
 
 ## Implementing a Provider
 
@@ -277,12 +458,18 @@ Make sure `my_guardrail.py` is on the Python path (e.g. in the backend directory
 │  thread_id: str | None    │    │  metadata: dict           │
 │  is_subagent: bool        │    │                           │
 │  timestamp: str           │    │  GuardrailReason:         │
-│                           │    │    code: str              │
-└──────────────────────────┘    │    message: str           │
+│  user_id: str | None      │    │    code: str              │
+│  user_role: str | None    │    │    message: str           │
+│  oauth_provider: str | None│   │                           │
+│  oauth_id: str | None     │    │                           │
+│  run_id: str | None       │    │                           │
+│  tool_call_id: str | None │    │                           │
+│                           │    │                           │
+└──────────────────────────┘    │                           │
                                 └──────────────────────────┘
 ```
 
-### MedrixFlow Tool Names
+### DeerFlow Tool Names
 
 These are the tool names your provider will see in `request.tool_name`:
 
@@ -296,7 +483,7 @@ These are the tool names your provider will see in `request.tool_name`:
 | `web_search` | Web search query |
 | `web_fetch` | Fetch URL content |
 | `image_search` | Image search |
-| `present_file` | Present file to user |
+| `present_files` | Present file to user |
 | `view_image` | Display image |
 | `ask_clarification` | Ask user a question |
 | `task` | Delegate to subagent |
@@ -318,14 +505,14 @@ Standard codes used by the [OAP specification](https://github.com/aporthq/aport-
 
 ### Provider Loading
 
-MedrixFlow loads providers via `resolve_variable()` -- the same mechanism used for models, tools, and sandbox providers. The `use:` field is a Python class path: `package.module:ClassName`.
+DeerFlow loads providers via `resolve_variable()` -- the same mechanism used for models, tools, and sandbox providers. The `use:` field is a Python class path: `package.module:ClassName`.
 
-The provider is instantiated with `**config` kwargs if `config:` is set, plus `framework="medrix_flow"` is always injected. Accept `**kwargs` to stay forward-compatible:
+The provider is instantiated with `**config` kwargs if `config:` is set, plus `framework="deerflow"` is always injected. Accept `**kwargs` to stay forward-compatible:
 
 ```python
 class YourProvider:
     def __init__(self, framework: str = "generic", **kwargs):
-        # framework="medrix_flow" tells you which config dir to use
+        # framework="deerflow" tells you which config dir to use
         ...
 ```
 
@@ -345,7 +532,7 @@ guardrails:
 
   # Provider: loaded by class path via resolve_variable
   provider:
-    use: medrix_flow.guardrails.builtin:AllowlistProvider
+    use: deerflow.guardrails.builtin:AllowlistProvider
     config:  # optional kwargs passed to provider.__init__
       denied_tools: ["bash"]
 ```
@@ -367,16 +554,16 @@ uv run python -m pytest tests/test_guardrail_middleware.py -v
 ## Files
 
 ```
-packages/harness/medrix_flow/guardrails/
+packages/harness/deerflow/guardrails/
     __init__.py              # Public exports
     provider.py              # GuardrailProvider protocol, GuardrailRequest, GuardrailDecision
     middleware.py             # GuardrailMiddleware (AgentMiddleware subclass)
     builtin.py               # AllowlistProvider (zero deps)
 
-packages/harness/medrix_flow/config/
+packages/harness/deerflow/config/
     guardrails_config.py     # GuardrailsConfig Pydantic model + singleton
 
-packages/harness/medrix_flow/agents/middlewares/
+packages/harness/deerflow/agents/middlewares/
     tool_error_handling_middleware.py  # Registers GuardrailMiddleware in chain
 
 config.example.yaml          # Three provider options documented

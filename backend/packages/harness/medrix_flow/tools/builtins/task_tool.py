@@ -174,10 +174,7 @@ def task_tool(
                 )
                 logger.info(f"[trace={trace_id}] Task {task_id} sent message #{i + 1}/{current_message_count}")
             last_message_count = current_message_count
-        elif (
-            result.status == SubagentStatus.RUNNING
-            and poll_count - last_heartbeat_poll >= TASK_HEARTBEAT_INTERVAL_SECONDS // TASK_POLL_INTERVAL_SECONDS
-        ):
+        elif result.status == SubagentStatus.RUNNING and poll_count - last_heartbeat_poll >= TASK_HEARTBEAT_INTERVAL_SECONDS // TASK_POLL_INTERVAL_SECONDS:
             # Emit a lightweight heartbeat so the UI can keep showing progress
             # even when the subagent has not produced a new AI message yet.
             writer(
@@ -223,10 +220,7 @@ def task_tool(
         if result.started_at is not None and elapsed_seconds > config.timeout_seconds + 60:
             timeout_minutes = config.timeout_seconds // 60
             error = f"Polling safety timeout after {timeout_minutes} minutes. This may indicate the background task is stuck."
-            logger.error(
-                f"[trace={trace_id}] Task {task_id} polling timed out after {elapsed_seconds:.1f}s of execution "
-                "(should have been caught by thread pool timeout)"
-            )
+            logger.error(f"[trace={trace_id}] Task {task_id} polling timed out after {elapsed_seconds:.1f}s of execution (should have been caught by thread pool timeout)")
             mark_background_task_timed_out(task_id, error)
             writer({"type": "task_timed_out", "task_id": task_id, "error": error})
             cleanup_background_task(task_id)
