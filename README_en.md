@@ -129,7 +129,7 @@ This page is an inventory, not an editor. It does not provide create, delete, ed
 ## Architecture
 
 ```text
-                  http://localhost:6200
+                  http://localhost:2026
                           |
                           v
                   +----------------+
@@ -139,37 +139,32 @@ This page is an inventory, not an editor. It does not provide create, delete, ed
                       |        |
       /api/langgraph/*|        |/api/*
                       v        v
+        +----------------------------------------+
+        | Gateway API + embedded DeerFlow runtime|
+        | FastAPI :8001                          |
+        | models/setup, agent runs, research     |
+        | academic, experiments, artifacts       |
+        +----------------+-----------+-----------+
+                         |           |
+                         v           v
         +----------------+   +------------------+
-        | LangGraph      |   | Gateway API      |
-        | Server :6203   |   | FastAPI :6202    |
-        |                |   |                  |
-        | Lead agent     |   | models/setup     |
-        | middleware     |   | features         |
-        | tools          |   | academic         |
-        | subagents      |   | research         |
-        +-------+--------+   | experiments      |
-                |            | artifacts/runs   |
-                |            +---------+--------+
-                |                      |
-                v                      v
-        +----------------+   +------------------+
-        | Sandbox / VFS  |   | SQLite / files   |
-        | /mnt/user-data |   | .medrix-flow     |
+        | Sandbox / VFS  |   | DeerFlow state   |
+        | thread-scoped  |   | .deer-flow       |
         +----------------+   +------------------+
 
         +----------------------------------------+
-        | Frontend :6201                         |
+        | Frontend :3000                         |
         | Next.js 16 / React 19 / Tailwind CSS 4 |
         +----------------------------------------+
 ```
 
 Request routing:
 
-- `/api/langgraph/*` -> LangGraph Server for agent interaction, threads, SSE streaming, and long-running runs.
+- `/api/langgraph/*` -> Gateway's embedded LangGraph-compatible runtime for agent interaction, threads, SSE streaming, and long-running runs.
 - `/api/*` -> Gateway API for setup, features, academic research, research quests, experiments, uploads, artifacts, and runs.
 - `/` -> Frontend, served by Next.js.
 
-Runtime data is stored under `backend/.medrix-flow` or the directory pointed to by `MEDRIX_FLOW_HOME`. Each thread maps a virtual filesystem to `/mnt/user-data/{workspace,uploads,outputs}`.
+Primary DeerFlow runtime data is stored under `backend/.deer-flow` or the directory pointed to by `DEER_FLOW_HOME`. Anaxa's legacy research sidecar remains isolated under `.medrix-flow` (or `ANAXA_RESEARCH_HOME`). Each thread maps a virtual filesystem to its thread-scoped workspace, uploads, and outputs.
 
 ## Quick Start
 
@@ -218,17 +213,16 @@ make dev
 Open:
 
 ```text
-http://localhost:6200
+http://localhost:2026
 ```
 
 On first launch, open "Settings & More -> Setup" in the lower-left corner, add at least one chat model and API key, then save.
 
 The development command starts:
 
-- Frontend: `http://localhost:6201`
-- Gateway API: `http://localhost:6202`
-- LangGraph Server: `http://localhost:6203`
-- Unified Nginx entry: `http://localhost:6200`
+- Frontend: `http://localhost:3000`
+- Gateway API + embedded agent runtime: `http://localhost:8001`
+- Unified Nginx entry: `http://localhost:2026`
 
 ### Optional Docker Path
 
@@ -242,7 +236,7 @@ make docker-start
 Open the same URL:
 
 ```text
-http://localhost:6200
+http://localhost:2026
 ```
 
 Stop Docker development mode with:
@@ -270,7 +264,7 @@ make docker-stop
 
 ### Normal Use: Configure in the Frontend
 
-After startup, visit `http://localhost:6200` and open "Settings & More -> Setup":
+After startup, visit `http://localhost:2026` and open "Settings & More -> Setup":
 
 - Add the model provider, model name, and API key.
 - Configure web search, web fetch, academic retrieval, and other tool API keys.
@@ -308,7 +302,7 @@ Anaxa 1.0 is the user-facing product name. Some technical identifiers remain unc
 - Python import package: `medrix_flow`
 - Compatibility names in Python distribution and workspace packages
 - Environment variables: `MEDRIX_FLOW_*`
-- Runtime directory: `.medrix-flow`
+- Primary runtime directory: `.deer-flow`; legacy research sidecar directory: `.medrix-flow`
 - Admin header: `x-medrix-admin-token`
 - Some Docker container, Compose project, and cleanup prefixes
 
