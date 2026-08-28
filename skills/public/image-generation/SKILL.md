@@ -228,6 +228,36 @@ For scenarios where visual accuracy is critical, **use the `image_search` tool f
 
 This approach significantly improves generation quality by providing the model with concrete visual guidance rather than relying solely on text descriptions.
 
+## Providers (Google AI Studio, OpenAI-compatible, and MiniMax)
+
+The script keeps the configured Anaxa provider by default and also supports
+DeerFlow's MiniMax provider. Provider selection is resolved in this order:
+
+- An explicit `--provider` or `provider=` argument.
+- `IMAGE_GENERATION_PROVIDER` (accepts `gemini`, `google`, `google-ai-studio`, `minimax`, or `openai-compatible`).
+- The legacy Settings value `IMAGE_GEN_ACTIVE_PROVIDER`.
+- Google credentials (`GEMINI_API_KEY` or `GOOGLE_API_KEY`), then MiniMax (`MINIMAX_API_KEY`).
+
+For Google AI Studio, `IMAGE_GEN_GOOGLE_MODEL` selects the model. For the
+OpenAI-compatible provider, configure `IMAGE_GEN_OPENAI_MODEL`,
+`IMAGE_GEN_OPENAI_BASE_URL`, and `IMAGE_GEN_OPENAI_API_KEY`. The base URL is
+the API root (for example `https://provider.example.com/v1`); the script
+appends `/images/generations`.
+
+When only `MINIMAX_API_KEY` is available, MiniMax is selected automatically
+and calls `/v1/image_generation` with model `image-01`. Override the host or
+model with `MINIMAX_API_HOST` and `MINIMAX_IMAGE_MODEL`. Structured prompt
+files remain provider-agnostic: MiniMax sends only the JSON `prompt` field,
+enables `prompt_optimizer`, and rejects prompts over 1500 characters before
+calling the API. Reference images are sent as MiniMax `subject_reference`
+character images.
+
+The optional `--scientific-mode`, `--image-size`, `--output-mime-type`,
+`--draft-mode`, and `--manifest-file` arguments work with all supported
+providers. Scientific mode adds the conceptual-illustration guardrail and
+defaults to 4K PNG; a generation manifest records the resolved provider,
+model, prompt, references, output dimensions, and retry count.
+
 ## Quality Standards (Mandatory)
 
 ### Before Generation — Clarify Requirements

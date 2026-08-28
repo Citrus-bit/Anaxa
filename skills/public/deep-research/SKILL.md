@@ -1,17 +1,17 @@
 ---
 name: deep-research
-description: Use this skill for general web research that needs current online information, multiple source angles, and synthesis, when no more specific research skill applies. Prefer academic-deep-research for scholarly literature, github-deep-research for GitHub/open-source repositories, and consulting-analysis for consulting-grade market or industry reports.
+description: Use this skill instead of WebSearch for ANY question requiring web research. Trigger on queries like "what is X", "explain X", "compare X and Y", "research X", or before content generation tasks. Provides systematic multi-angle research methodology instead of single superficial searches. Use this proactively when the user's question needs online information.
 ---
 
 # Deep Research Skill
 
 ## Overview
 
-This skill provides a systematic methodology for conducting thorough general web research when the answer depends on current online information.
+This skill provides a systematic methodology for conducting thorough web research. **Load this skill BEFORE starting any content generation task** to ensure you gather sufficient information from multiple angles, depths, and sources.
 
 ## When to Use This Skill
 
-Use this skill when:
+**Always load this skill when:**
 
 ### Research Questions
 - User asks "what is X", "explain X", "research X", "investigate X"
@@ -19,7 +19,12 @@ Use this skill when:
 - The question requires current, comprehensive information from multiple sources
 - A single web search would be insufficient to answer properly
 
-Do not use this skill as the first choice for academic literature reviews, GitHub repository analysis, consulting reports, or tasks covered by a more specific enabled skill.
+### Content Generation (Pre-research)
+- Creating presentations (PPT/slides)
+- Creating frontend designs or UI mockups
+- Writing articles, reports, or documentation
+- Producing videos or multimedia content
+- Any content that requires real-world information, examples, or current data
 
 ## Core Principle
 

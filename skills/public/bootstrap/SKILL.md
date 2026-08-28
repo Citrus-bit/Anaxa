@@ -3,8 +3,10 @@ name: bootstrap
 description: >-
   Generate a personalized SOUL.md through a warm, adaptive onboarding conversation.
   Trigger when the user wants to create, set up, or initialize their AI partner's
-  identity, or when a SOUL.md is missing. Also trigger for updates to an existing
-  SOUL.md or AI personality.
+  identity — e.g., "create my SOUL.md", "bootstrap my agent", "set up my AI
+  partner", "define who you are", "let's do onboarding", "personalize this AI",
+  "make you mine", or when a SOUL.md is missing. Also trigger for updates:
+  "update my SOUL.md", "change my AI's personality", "tweak the soul".
 ---
 
 # Bootstrap Soul
@@ -17,13 +19,12 @@ A conversational onboarding skill. Through 5–8 adaptive rounds, extract who th
 bootstrap/
 ├── SKILL.md                          ← You are here. Core logic and flow.
 ├── templates/SOUL.template.md        ← Output template. Read before generating.
-└── references/conversation-guide.md  ← Detailed conversation strategies. Read when needed.
+└── references/conversation-guide.md  ← Detailed conversation strategies. Read at start.
 ```
 
-Use progressive loading:
-1. Start with this file and the user's request.
-2. Read `references/conversation-guide.md` only when you need phase-by-phase wording or pacing guidance.
-3. Read `templates/SOUL.template.md` only before generating or revising the final SOUL.md.
+**Before your first response**, read both:
+1. `references/conversation-guide.md` — how to run each phase
+2. `templates/SOUL.template.md` — what you're building toward
 
 ## Ground Rules
 

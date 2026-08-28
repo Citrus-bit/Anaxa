@@ -11,7 +11,7 @@ Deliver an unexpected, delightful experience by dynamically discovering availabl
 
 ### Step 1: Discover Available Skills
 
-Review the skill names and descriptions already listed in `<available_skills>`. Do not read every skill body. Pick the most relevant candidates from metadata first.
+Read all the skills listed in the <available_skills>.
 
 ### Step 2: Plan the Surprise
 
@@ -40,7 +40,7 @@ If no other skills are discovered (only surprise-me exists), use one of these fa
 
 ### Step 4: Execute
 
-1. Read the SKILL.md body only for the 1 to 3 selected skills
+1. Read the full SKILL.md body of each selected skill
 2. Follow each skill's instructions for technical execution
 3. Combine outputs into one cohesive deliverable
 4. Present the result with minimal preamble — let the work speak for itself

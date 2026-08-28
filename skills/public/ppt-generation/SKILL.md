@@ -45,17 +45,6 @@ When a user requests presentation generation, identify:
 - Content outline: Key points for each slide
 - You don't need to check the folder under `/mnt/user-data`
 
-### Scenario Presets
-
-Read `templates/presets.json` for 5 pre-built presentation scenarios:
-- **pitch-deck**: Startup pitch (10 slides, gradient-modern style)
-- **quarterly-report**: Business review (12 slides, minimal-swiss style)
-- **product-launch**: Keynote launch (8 slides, keynote style)
-- **training-workshop**: Educational training (15 slides, 3d-isometric style)
-- **annual-review**: Year-end review (15 slides, editorial style)
-
-Each preset includes a recommended storytelling arc, slide count, style, and detailed style_guidelines. Use these as starting points and customize based on user requirements.
-
 ### Step 2: Create Presentation Plan
 
 Create a JSON file in `/mnt/user-data/workspace/` with the presentation structure. **Important**: Include the `style` field to define the overall visual consistency.
@@ -64,13 +53,6 @@ Create a JSON file in `/mnt/user-data/workspace/` with the presentation structur
 {
   "title": "Presentation Title",
   "style": "keynote",
-  "author": "Author Name",
-  "keywords": ["keyword1", "keyword2"],
-  "image_fit": "cover",
-  "transition": {
-    "speed": "medium",
-    "advance_after_seconds": null
-  },
   "style_guidelines": {
     "color_palette": "Deep black backgrounds, white text, single accent color (blue or orange)",
     "typography": "Bold sans-serif headlines, clean body text, dramatic size contrast",
@@ -436,37 +418,6 @@ After generation:
 - Also share the individual slide images if requested
 - Provide brief description of the presentation
 - Offer to iterate or regenerate specific slides if needed
-
-## Quality Standards (Mandatory)
-
-### Before Generation — Clarify Requirements
-If ANY of the following are unclear, call `ask_clarification` BEFORE generating:
-- What is the presentation's purpose? (pitch, report, training, keynote)
-- Who is the audience? (executives, technical team, general public)
-- How many slides? (default 5-10, but confirm)
-- Are there brand guidelines? (colors, fonts, logo)
-- Preferred style? (present the 8 style options if user hasn't chosen)
-
-### Slide Design Checklist
-Apply these rules when creating the presentation plan and slide prompts:
-
-1. **One message per slide**: Each slide communicates exactly ONE core idea. If you need two ideas, use two slides.
-2. **Storytelling arc**: Hook (slide 1-2) → Context (slide 3-4) → Solution/Evidence (slide 5-7) → Impact + CTA (final slides).
-3. **Visual hierarchy**: Headlines 48-72pt bold at top 20%. Body text 18-24pt, max 3 bullet points. Images 50-70% of slide area.
-4. **Negative space**: Maintain 40%+ whitespace. Cluttered slides = unprofessional.
-5. **Color consistency**: Define palette in `style_guidelines` with exact hex codes. Use the same palette across ALL slides.
-6. **Prompt precision**: Each `visual_description` must be 100+ words with specific details (colors, layout, typography, effects). Vague prompts produce generic results.
-7. **Reference chaining**: NEVER skip `--reference-images` for slides 2+. This is the primary mechanism for visual consistency.
-
-### After Generation — Self-Review
-Before composing the final PPTX, review each slide image:
-- [ ] Does slide 1 establish a clear, professional visual language?
-- [ ] Are slides 2+ visually consistent with slide 1? (same colors, typography, layout style)
-- [ ] Does each slide have a clear focal point and readable text?
-- [ ] Does the presentation follow a logical storytelling arc?
-- [ ] Is the overall aesthetic appropriate for the audience?
-
-If any slide looks inconsistent, regenerate it with STRONGER reference emphasis before composing.
 
 ## Notes
 
