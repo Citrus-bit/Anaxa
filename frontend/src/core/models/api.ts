@@ -1,28 +1,31 @@
+import { throwGatewayApiError } from "@/core/api/errors";
+import { fetch } from "@/core/api/fetcher";
+
 import { getBackendBaseURL } from "../config";
+import { isStaticWebsiteOnly } from "../static-mode";
 
-import type { Model } from "./types";
+import type { ModelsResponse } from "./types";
 
-export async function loadModels() {
+const STATIC_MODELS_RESPONSE: ModelsResponse = {
+  models: [],
+  token_usage: { enabled: false },
+};
+
+export async function loadModels(): Promise<ModelsResponse> {
+  if (isStaticWebsiteOnly()) {
+    return STATIC_MODELS_RESPONSE;
+  }
+
   const res = await fetch(`${getBackendBaseURL()}/api/models`);
-  const payload = (await res.json().catch(() => null)) as unknown;
   if (!res.ok) {
-    const detail =
-      typeof payload === "object" && payload !== null
-        ? Reflect.get(payload, "detail")
-        : undefined;
-    throw new Error(
-      typeof detail === "string" && detail.trim()
-        ? detail
-        : `Model request failed (${res.status}).`,
+    await throwGatewayApiError(
+      res,
+      `Failed to load models: ${res.status} ${res.statusText}`.trim(),
     );
   }
-
-  const models =
-    typeof payload === "object" && payload !== null
-      ? Reflect.get(payload, "models")
-      : undefined;
-  if (!Array.isArray(models)) {
-    throw new Error("Model response was invalid.");
-  }
-  return models as Model[];
+  const data = (await res.json()) as Partial<ModelsResponse>;
+  return {
+    models: data.models ?? [],
+    token_usage: data.token_usage ?? { enabled: false },
+  };
 }

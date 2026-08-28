@@ -1,44 +1,20 @@
+import { usePathname } from "next/navigation";
 import {
   createContext,
+  type Dispatch,
   useCallback,
   useContext,
+  useEffect,
+  useRef,
   useState,
   type ReactNode,
+  type SetStateAction,
 } from "react";
 
 import { useSidebar } from "@/components/ui/sidebar";
+import type { ArtifactDraftState } from "@/core/artifacts/editing";
 import type { ArtifactInventoryEntry } from "@/core/artifacts/utils";
 import { env } from "@/env";
-
-function haveSameArtifactPaths(left: string[], right: string[]) {
-  if (left.length !== right.length) {
-    return false;
-  }
-  return left.every((filepath, index) => filepath === right[index]);
-}
-
-function haveSameArtifactEntries(
-  left: Record<string, ArtifactInventoryEntry>,
-  right: Record<string, ArtifactInventoryEntry>,
-) {
-  const leftKeys = Object.keys(left);
-  const rightKeys = Object.keys(right);
-  if (leftKeys.length !== rightKeys.length) {
-    return false;
-  }
-
-  return leftKeys.every((key) => {
-    const leftEntry = left[key];
-    const rightEntry = right[key];
-    return (
-      rightEntry !== undefined &&
-      leftEntry?.filepath === rightEntry.filepath &&
-      leftEntry?.size === rightEntry.size &&
-      leftEntry?.modifiedAt === rightEntry.modifiedAt &&
-      leftEntry?.source === rightEntry.source
-    );
-  });
-}
 
 export interface ArtifactsContextType {
   artifacts: string[];
@@ -55,11 +31,56 @@ export interface ArtifactsContextType {
   open: boolean;
   autoOpen: boolean;
   setOpen: (open: boolean) => void;
+
+  drafts: Record<string, ArtifactDraftState>;
+  setDrafts: Dispatch<SetStateAction<Record<string, ArtifactDraftState>>>;
+  editingPath: string | null;
+  setEditingPath: Dispatch<SetStateAction<string | null>>;
 }
 
 const ArtifactsContext = createContext<ArtifactsContextType | undefined>(
   undefined,
 );
+
+const ARTIFACTS_STORAGE_PREFIX = "deerflow:artifacts:v1";
+
+type PersistedArtifactsState = {
+  artifacts: string[];
+  selectedArtifact: string | null;
+  open: boolean;
+};
+
+function storageKey(pathname: string) {
+  return `${ARTIFACTS_STORAGE_PREFIX}:${encodeURIComponent(pathname)}`;
+}
+
+function readPersistedState(pathname: string): PersistedArtifactsState | null {
+  try {
+    const raw = window.sessionStorage.getItem(storageKey(pathname));
+    if (!raw) {
+      return null;
+    }
+    const parsed = JSON.parse(raw) as Partial<PersistedArtifactsState>;
+    if (
+      !Array.isArray(parsed.artifacts) ||
+      !parsed.artifacts.every((artifact) => typeof artifact === "string") ||
+      !(
+        parsed.selectedArtifact === null ||
+        typeof parsed.selectedArtifact === "string"
+      ) ||
+      typeof parsed.open !== "boolean"
+    ) {
+      return null;
+    }
+    return {
+      artifacts: parsed.artifacts,
+      selectedArtifact: parsed.selectedArtifact,
+      open: parsed.open,
+    };
+  } catch {
+    return null;
+  }
+}
 
 interface ArtifactsProviderProps {
   children: ReactNode;
@@ -76,7 +97,63 @@ export function ArtifactsProvider({ children }: ArtifactsProviderProps) {
     env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY === "true",
   );
   const [autoOpen, setAutoOpen] = useState(true);
+  const [drafts, setDrafts] = useState<Record<string, ArtifactDraftState>>({});
+  const [editingPath, setEditingPath] = useState<string | null>(null);
   const { setOpen: setSidebarOpen } = useSidebar();
+  const pathname = usePathname();
+  const hydratedPathRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!pathname) {
+      return;
+    }
+
+    const persisted = readPersistedState(pathname);
+    setArtifacts(persisted?.artifacts ?? []);
+    setArtifactEntries(
+      Object.fromEntries(
+        (persisted?.artifacts ?? []).map((filepath) => [
+          filepath,
+          { filepath, source: "thread" as const },
+        ]),
+      ),
+    );
+    setSelectedArtifact(persisted?.selectedArtifact ?? null);
+    setOpen(persisted?.open ?? env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY === "true");
+    setAutoOpen(true);
+    setAutoSelect(!persisted?.selectedArtifact);
+    setDrafts({});
+    setEditingPath(null);
+    hydratedPathRef.current = pathname;
+  }, [pathname]);
+
+  useEffect(() => {
+    const hasUnsavedDrafts = Object.values(drafts).some(
+      (draft) => draft.draftContent !== draft.baselineContent,
+    );
+    if (!hasUnsavedDrafts) {
+      return;
+    }
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [drafts]);
+
+  useEffect(() => {
+    if (!pathname || hydratedPathRef.current !== pathname) {
+      return;
+    }
+    try {
+      window.sessionStorage.setItem(
+        storageKey(pathname),
+        JSON.stringify({ artifacts, selectedArtifact, open }),
+      );
+    } catch {
+      // Browser storage can be disabled or full; panel state must keep working.
+    }
+  }, [artifacts, open, pathname, selectedArtifact]);
 
   const select = useCallback(
     (artifact: string, autoSelect = false) => {
@@ -98,33 +175,26 @@ export function ArtifactsProvider({ children }: ArtifactsProviderProps) {
   }, []);
 
   const setArtifactInventory = useCallback((entries: ArtifactInventoryEntry[]) => {
-    const nextArtifacts = entries.map((entry) => entry.filepath);
-    const nextArtifactEntries = Object.fromEntries(
+    const nextEntries = Object.fromEntries(
       entries.map((entry) => [entry.filepath, entry]),
     );
+    const nextArtifacts = entries.map((entry) => entry.filepath);
+    setArtifacts(nextArtifacts);
+    setArtifactEntries(nextEntries);
+  }, []);
 
-    setArtifacts((currentArtifacts) =>
-      haveSameArtifactPaths(currentArtifacts, nextArtifacts)
-        ? currentArtifacts
-        : nextArtifacts,
-    );
-    setArtifactEntries((currentEntries) =>
-      haveSameArtifactEntries(currentEntries, nextArtifactEntries)
-        ? currentEntries
-        : nextArtifactEntries,
+  const setArtifactsCompat = useCallback((nextArtifacts: string[]) => {
+    setArtifacts(nextArtifacts);
+    setArtifactEntries(
+      Object.fromEntries(
+        nextArtifacts.map((filepath) => [filepath, { filepath, source: "thread" as const }]),
+      ),
     );
   }, []);
 
   const value: ArtifactsContextType = {
     artifacts,
-    setArtifacts: (nextArtifacts) => {
-      setArtifactInventory(
-        nextArtifacts.map((filepath) => ({
-          filepath,
-          source: "thread",
-        })),
-      );
-    },
+    setArtifacts: setArtifactsCompat,
     artifactEntries,
     setArtifactInventory,
     latestArtifact: artifacts[0] ?? null,
@@ -143,6 +213,11 @@ export function ArtifactsProvider({ children }: ArtifactsProviderProps) {
     selectedArtifact,
     select,
     deselect,
+
+    drafts,
+    setDrafts,
+    editingPath,
+    setEditingPath,
   };
 
   return (

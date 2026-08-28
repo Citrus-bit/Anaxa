@@ -1,8 +1,5 @@
 "use client";
 
-import { type LucideIcon, XIcon } from "lucide-react";
-import type { ComponentProps, HTMLAttributes } from "react";
-
 import { Button } from "@/components/ui/button";
 import {
   Tooltip,
@@ -11,6 +8,8 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+import { type LucideIcon, XIcon } from "lucide-react";
+import type { ComponentProps, HTMLAttributes } from "react";
 
 export type ArtifactProps = HTMLAttributes<HTMLDivElement>;
 
@@ -104,13 +103,10 @@ export const ArtifactAction = ({
   className,
   size = "sm",
   variant = "ghost",
-  asChild = false,
   ...props
 }: ArtifactActionProps) => {
-  const accessibleLabel = label ?? tooltip;
   const button = (
     <Button
-      asChild={asChild}
       className={cn(
         "text-muted-foreground hover:text-foreground size-8 p-0",
         className,
@@ -120,16 +116,8 @@ export const ArtifactAction = ({
       variant={variant}
       {...props}
     >
-      {asChild ? (
-        children
-      ) : (
-        <>
-          {Icon ? <Icon className="size-4" /> : children}
-          {accessibleLabel ? (
-            <span className="sr-only">{accessibleLabel}</span>
-          ) : null}
-        </>
-      )}
+      {Icon ? <Icon className="size-4" /> : children}
+      <span className="sr-only">{label || tooltip}</span>
     </Button>
   );
 

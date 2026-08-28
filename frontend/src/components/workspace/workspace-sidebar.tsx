@@ -9,6 +9,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 
+import { WorkspaceChannelsList } from "./channels/workspace-channels-list";
 import { RecentChatList } from "./recent-chat-list";
 import { WorkspaceHeader } from "./workspace-header";
 import { WorkspaceNavChatList } from "./workspace-nav-chat-list";
@@ -20,20 +21,16 @@ export function WorkspaceSidebar({
   const { open: isSidebarOpen } = useSidebar();
   return (
     <>
-      <Sidebar
-        variant="sidebar"
-        collapsible="icon"
-        data-testid="workspace-sidebar"
-        {...props}
-      >
-        <SidebarHeader className="border-b border-[var(--sidebar-border)] py-0">
+      <Sidebar variant="sidebar" collapsible="icon" {...props}>
+        <SidebarHeader className="py-0">
           <WorkspaceHeader />
         </SidebarHeader>
-        <SidebarContent className="px-1">
+        <SidebarContent>
           <WorkspaceNavChatList />
+          <WorkspaceChannelsList />
           {isSidebarOpen && <RecentChatList />}
         </SidebarContent>
-        <SidebarFooter className="border-t border-[var(--sidebar-border)]">
+        <SidebarFooter>
           <WorkspaceNavMenu />
         </SidebarFooter>
         <SidebarRail />

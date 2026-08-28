@@ -1,12 +1,19 @@
 "use client";
 
-import { useQueryClient } from "@tanstack/react-query";
 import {
   BellIcon,
-  CogIcon,
+  CableIcon,
+  InfoIcon,
+  BrainIcon,
+  PaletteIcon,
+  PlugZapIcon,
   SparklesIcon,
+  UsersRoundIcon,
+  UserIcon,
+  WrenchIcon,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import dynamic from "next/dynamic";
+import { useEffect, useMemo, useState } from "react";
 
 import {
   Dialog,
@@ -15,61 +22,164 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { FeatureSettingsPage } from "@/components/workspace/settings/feature-settings-page";
-import { NotificationSettingsPage } from "@/components/workspace/settings/notification-settings-page";
-import { SetupSettingsPage } from "@/components/workspace/settings/setup-settings-page";
-import { featuresQueryOptions } from "@/core/features";
 import { useI18n } from "@/core/i18n/hooks";
-import { setupQueryOptions } from "@/core/setup/hooks";
 import { cn } from "@/lib/utils";
 
-type SettingsSection =
-  | "setup"
-  | "features"
-  | "notification";
+function SettingsPageLoading() {
+  return (
+    <p role="status" className="text-muted-foreground py-8 text-center text-sm">
+      Loading…
+    </p>
+  );
+}
+
+const AccountSettingsPage = dynamic(
+  () =>
+    import("./account-settings-page").then(
+      (module) => module.AccountSettingsPage,
+    ),
+  { loading: SettingsPageLoading },
+);
+const AppearanceSettingsPage = dynamic(
+  () =>
+    import("./appearance-settings-page").then(
+      (module) => module.AppearanceSettingsPage,
+    ),
+  { loading: SettingsPageLoading },
+);
+const ChannelsSettingsPage = dynamic(
+  () =>
+    import("./channels-settings-page").then(
+      (module) => module.ChannelsSettingsPage,
+    ),
+  { loading: SettingsPageLoading },
+);
+const IntegrationsSettingsPage = dynamic(
+  () =>
+    import("./integrations-settings-page").then(
+      (module) => module.IntegrationsSettingsPage,
+    ),
+  { loading: SettingsPageLoading },
+);
+const MemorySettingsPage = dynamic(
+  () =>
+    import("./memory-settings-page").then(
+      (module) => module.MemorySettingsPage,
+    ),
+  { loading: SettingsPageLoading },
+);
+const NotificationSettingsPage = dynamic(
+  () =>
+    import("./notification-settings-page").then(
+      (module) => module.NotificationSettingsPage,
+    ),
+  { loading: SettingsPageLoading },
+);
+const SkillSettingsPage = dynamic(
+  () =>
+    import("./skill-settings-page").then((module) => module.SkillSettingsPage),
+  { loading: SettingsPageLoading },
+);
+const ToolSettingsPage = dynamic(
+  () =>
+    import("./tool-settings-page").then((module) => module.ToolSettingsPage),
+  { loading: SettingsPageLoading },
+);
+const SubagentSettingsPage = dynamic(
+  () =>
+    import("./subagent-settings-page").then(
+      (module) => module.SubagentSettingsPage,
+    ),
+  { loading: SettingsPageLoading },
+);
+const AboutSettingsPage = dynamic(
+  () =>
+    import("./about-settings-page").then((module) => module.AboutSettingsPage),
+  { loading: SettingsPageLoading },
+);
+
+export type SettingsSection =
+  | "account"
+  | "appearance"
+  | "channels"
+  | "integrations"
+  | "memory"
+  | "tools"
+  | "subagents"
+  | "skills"
+  | "notification"
+  | "about";
 
 type SettingsDialogProps = React.ComponentProps<typeof Dialog> & {
   defaultSection?: SettingsSection;
 };
 
 export function SettingsDialog(props: SettingsDialogProps) {
-  const { defaultSection = "setup", ...dialogProps } = props;
+  const { defaultSection = "appearance", ...dialogProps } = props;
   const { t } = useI18n();
-  const queryClient = useQueryClient();
   const [activeSection, setActiveSection] =
     useState<SettingsSection>(defaultSection);
-  const prefetchedRef = useRef(false);
 
   useEffect(() => {
+    // When opening the dialog, ensure the active section follows the caller's intent.
+    // This allows triggers like "About" to open the dialog directly on that page.
     if (dialogProps.open) {
       setActiveSection(defaultSection);
-
-      if (!prefetchedRef.current) {
-        prefetchedRef.current = true;
-        void queryClient.prefetchQuery(setupQueryOptions);
-        void queryClient.prefetchQuery(featuresQueryOptions);
-      }
     }
-  }, [defaultSection, dialogProps.open, queryClient]);
+  }, [defaultSection, dialogProps.open]);
 
   const sections = useMemo(
     () => [
       {
-        id: "setup",
-        label: t.settings.sections.setup,
-        icon: CogIcon,
+        id: "account",
+        label: t.settings.sections.account,
+        icon: UserIcon,
       },
-      { id: "features", label: t.settings.sections.features, icon: SparklesIcon },
+      {
+        id: "appearance",
+        label: t.settings.sections.appearance,
+        icon: PaletteIcon,
+      },
       {
         id: "notification",
         label: t.settings.sections.notification,
         icon: BellIcon,
       },
+      {
+        id: "channels",
+        label: t.settings.sections.channels,
+        icon: CableIcon,
+      },
+      {
+        id: "integrations",
+        label: t.settings.sections.integrations,
+        icon: PlugZapIcon,
+      },
+      {
+        id: "memory",
+        label: t.settings.sections.memory,
+        icon: BrainIcon,
+      },
+      { id: "tools", label: t.settings.sections.tools, icon: WrenchIcon },
+      {
+        id: "subagents",
+        label: t.settings.sections.subagents,
+        icon: UsersRoundIcon,
+      },
+      { id: "skills", label: t.settings.sections.skills, icon: SparklesIcon },
+      { id: "about", label: t.settings.sections.about, icon: InfoIcon },
     ],
     [
-      t.settings.sections.setup,
-      t.settings.sections.features,
+      t.settings.sections.account,
+      t.settings.sections.appearance,
+      t.settings.sections.channels,
+      t.settings.sections.integrations,
+      t.settings.sections.memory,
+      t.settings.sections.tools,
+      t.settings.sections.subagents,
+      t.settings.sections.skills,
       t.settings.sections.notification,
+      t.settings.sections.about,
     ],
   );
   return (
@@ -87,7 +197,7 @@ export function SettingsDialog(props: SettingsDialogProps) {
             {t.settings.description}
           </p>
         </DialogHeader>
-        <div className="grid min-h-0 flex-1 gap-4 md:grid-cols-[220px_1fr]">
+        <div className="grid min-h-0 flex-1 gap-4 md:grid-cols-[220px_minmax(0,1fr)]">
           <nav className="bg-sidebar min-h-0 overflow-y-auto rounded-lg border p-2">
             <ul className="space-y-1 pr-1">
               {sections.map(({ id, label, icon: Icon }) => {
@@ -114,9 +224,20 @@ export function SettingsDialog(props: SettingsDialogProps) {
           </nav>
           <ScrollArea className="h-full min-h-0 rounded-lg border">
             <div className="space-y-8 p-6">
-              {activeSection === "setup" && <SetupSettingsPage />}
-              {activeSection === "features" && <FeatureSettingsPage />}
+              {activeSection === "account" && <AccountSettingsPage />}
+              {activeSection === "appearance" && <AppearanceSettingsPage />}
+              {activeSection === "memory" && <MemorySettingsPage />}
+              {activeSection === "tools" && <ToolSettingsPage />}
+              {activeSection === "subagents" && <SubagentSettingsPage />}
+              {activeSection === "skills" && (
+                <SkillSettingsPage
+                  onClose={() => props.onOpenChange?.(false)}
+                />
+              )}
               {activeSection === "notification" && <NotificationSettingsPage />}
+              {activeSection === "channels" && <ChannelsSettingsPage />}
+              {activeSection === "integrations" && <IntegrationsSettingsPage />}
+              {activeSection === "about" && <AboutSettingsPage />}
             </div>
           </ScrollArea>
         </div>

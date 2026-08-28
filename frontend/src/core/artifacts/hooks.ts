@@ -1,81 +1,30 @@
 import { useQuery } from "@tanstack/react-query";
-import { useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useThread } from "@/components/workspace/messages/context";
-import { getBackendBaseURL } from "@/core/config";
-
-import { fetchWithTimeout } from "../api/fetch";
 
 import { loadArtifactContent, loadArtifactContentFromToolCall } from "./loader";
-import {
-  mergeArtifactEntries,
-  type ArtifactInventoryEntry,
-  type ThreadArtifactRecord,
-} from "./utils";
-
-async function listThreadArtifacts(threadId: string) {
-  const response = await fetchWithTimeout(
-    `${getBackendBaseURL()}/api/threads/${encodeURIComponent(threadId)}/artifacts`,
-  );
-
-  if (!response.ok) {
-    return [] as ThreadArtifactRecord[];
-  }
-
-  const payload = (await response.json()) as {
-    files?: ThreadArtifactRecord[];
-  };
-  return payload.files ?? [];
-}
-
-export function useThreadArtifactInventory({
-  threadId,
-  seededArtifacts,
-  enabled = true,
-  refetchInterval = 5000,
-}: {
-  threadId: string;
-  seededArtifacts: string[];
-  enabled?: boolean;
-  refetchInterval?: number | false;
-}) {
-  const query = useQuery({
-    queryKey: ["thread-artifacts", threadId],
-    queryFn: () => listThreadArtifacts(threadId),
-    enabled: enabled && Boolean(threadId),
-    refetchInterval,
-    refetchOnWindowFocus: true,
-    staleTime: 0,
-    retry: 1,
-  });
-
-  const artifacts = useMemo<ArtifactInventoryEntry[]>(
-    () => mergeArtifactEntries(seededArtifacts, query.data ?? []),
-    [seededArtifacts, query.data],
-  );
-
-  return {
-    artifacts,
-    refetch: query.refetch,
-    isFetching: query.isFetching,
-  };
-}
 
 export function useArtifactContent({
   filepath,
   threadId,
   enabled,
-  versionKey,
 }: {
   filepath: string;
   threadId: string;
   enabled?: boolean;
-  versionKey?: string;
 }) {
   const isWriteFile = useMemo(() => {
     return filepath.startsWith("write-file:");
   }, [filepath]);
   const { thread, isMock } = useThread();
+  const [fullContentSelection, setFullContentSelection] = useState<{
+    filepath: string;
+    threadId: string;
+  } | null>(null);
+  const fullContentRequested =
+    fullContentSelection?.filepath === filepath &&
+    fullContentSelection.threadId === threadId;
   const content = useMemo(() => {
     if (isWriteFile) {
       return loadArtifactContentFromToolCall({ url: filepath, thread });
@@ -83,14 +32,46 @@ export function useArtifactContent({
     return null;
   }, [filepath, isWriteFile, thread]);
 
-  const { data, isLoading, error } = useQuery({
-    queryKey: ["artifact", filepath, threadId, isMock, versionKey],
+  const { data, isLoading, error, refetch } = useQuery({
+    queryKey: ["artifact", filepath, threadId, isMock, fullContentRequested],
     queryFn: () => {
-      return loadArtifactContent({ filepath, threadId, isMock, versionKey });
+      return loadArtifactContent({
+        filepath,
+        threadId,
+        isMock,
+        full: fullContentRequested,
+      });
     },
     enabled,
-    // Cache artifact content for 5 minutes to avoid repeated fetches (especially for .skill ZIP extraction)
-    staleTime: 5 * 60 * 1000,
+    staleTime: 0,
+    refetchOnWindowFocus: true,
   });
-  return { content: isWriteFile ? content : data, isLoading, error };
+
+  // Refetch once when the run settles so edits made during the run are
+  // visible without a manual reload.
+  const wasLoadingRef = useRef(thread.isLoading);
+  useEffect(() => {
+    const wasLoading = wasLoadingRef.current;
+    wasLoadingRef.current = thread.isLoading;
+    if (wasLoading && !thread.isLoading && enabled && !isWriteFile) {
+      void refetch().catch(() => undefined);
+    }
+  }, [enabled, isWriteFile, refetch, thread.isLoading]);
+
+  const loadFullContent = useCallback(() => {
+    setFullContentSelection({ filepath, threadId });
+  }, [filepath, threadId]);
+
+  return {
+    content: isWriteFile ? content : data?.content,
+    url: isWriteFile ? undefined : data?.url,
+    sha256: isWriteFile ? undefined : data?.sha256,
+    truncated: isWriteFile ? false : (data?.truncated ?? false),
+    previewBytes: isWriteFile ? undefined : data?.previewBytes,
+    totalBytes: isWriteFile ? undefined : data?.totalBytes,
+    fullContentRequested,
+    loadFullContent,
+    isLoading,
+    error,
+  };
 }

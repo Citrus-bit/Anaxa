@@ -1,7 +1,9 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
-@source "../node_modules/streamdown/dist/index.js";
+@source "../../node_modules/streamdown/dist/index.js";
+@source "../../node_modules/@streamdown/code/dist/*.js";
+@source "../../node_modules/@streamdown/mermaid/dist/*.js";
 
 /* Heading */
 @source inline("text-{xs,sm,base,lg,xl,2xl,3xl,4xl,5xl,6xl}");
@@ -70,10 +72,20 @@
 
 @custom-variant dark (&:is(.dark *));
 
+@keyframes streaming-list-marker-fade-in {
+  from {
+    color: transparent;
+  }
+}
+
+[data-streaming-list-item]::marker {
+  animation: streaming-list-marker-fade-in 200ms ease both;
+}
+
 @theme {
   --font-sans:
-    ui-sans-serif, system-ui, sans-serif,
-    "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+    ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji",
+    "Segoe UI Symbol", "Noto Color Emoji";
 
   --animate-fade-in: fade-in 1.1s;
   @keyframes fade-in {
@@ -82,6 +94,16 @@
     }
     100% {
       opacity: 1;
+    }
+  }
+
+  --animate-loading-bar: loading-bar 1s ease-in-out infinite;
+  @keyframes loading-bar {
+    0% {
+      transform: translateX(-100%);
+    }
+    100% {
+      transform: translateX(400%);
     }
   }
 
@@ -223,74 +245,77 @@
 }
 
 :root {
-  --radius: 0.75rem;
-  /* Anaxa Medical Teal Theme */
-  --background: #f8fffe;
-  --foreground: #0f2b2e;
-  --card: #ffffff;
-  --card-foreground: #0f2b2e;
-  --popover: #ffffff;
-  --popover-foreground: #0f2b2e;
-  --primary: #0891b2;
-  --primary-foreground: #ffffff;
-  --secondary: #e0f7fa;
-  --secondary-foreground: #0e4a5a;
-  --muted: #eef8f9;
-  --muted-foreground: #4a7c82;
-  --accent: #e0f7fa;
-  --accent-foreground: #0e4a5a;
-  --destructive: #ef4444;
-  --border: #c8e6e9;
-  --input: #c8e6e9;
-  --ring: #0891b2;
-  --chart-1: #0891b2;
-  --chart-2: #22d3ee;
-  --chart-3: #06b6d4;
-  --chart-4: #14b8a6;
-  --chart-5: #10b981;
-  --sidebar: #f0fafb;
-  --sidebar-foreground: #0f2b2e;
-  --sidebar-primary: #0891b2;
-  --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #ddf3f5;
-  --sidebar-accent-foreground: #0e4a5a;
-  --sidebar-border: #d1ecef;
-  --sidebar-ring: #0891b2;
-  font-weight: 300;
+  --radius: 0.625rem;
+  --background: oklch(0.9855 0.0098 87.47);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0.0098 87.47);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0.0098 87.47);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.9455 0.0098 87.47);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0.0098 87.47);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.94 0.0098 87.47);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.922 0.0098 87.47);
+  --input: oklch(0.88 0.0098 87.47);
+  --ring: oklch(0.58 0.18 255);
+  --chart-1: oklch(0.646 0.222 41.116);
+  --chart-2: oklch(0.6 0.118 184.704);
+  --chart-3: oklch(0.398 0.07 227.392);
+  --chart-4: oklch(0.828 0.189 84.429);
+  --chart-5: oklch(0.769 0.188 70.08);
+  --sidebar: oklch(0.965 0.0098 87.47);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: oklch(0.205 0.0098 87.47);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.925 0.0098 87.47);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0.0098 87.47);
+  --sidebar-ring: oklch(0.708 0 0);
+}
+
+html.dark .shiki span {
+  color: var(--shiki-dark) !important;
 }
 
 .dark {
-  --background: #0b1e21;
-  --foreground: #e0f2f4;
-  --card: #0f2930;
-  --card-foreground: #e0f2f4;
-  --popover: #0f2930;
-  --popover-foreground: #e0f2f4;
-  --primary: #22d3ee;
-  --primary-foreground: #082f35;
-  --secondary: #132e33;
-  --secondary-foreground: #a7dbe3;
-  --muted: #132e33;
-  --muted-foreground: #7eb8c2;
-  --accent: #132e33;
-  --accent-foreground: #a7dbe3;
-  --destructive: #ef4444;
-  --border: #1c3f45;
-  --input: #1c3f45;
-  --ring: #22d3ee;
-  --chart-1: #22d3ee;
-  --chart-2: #06b6d4;
-  --chart-3: #14b8a6;
-  --chart-4: #10b981;
-  --chart-5: #34d399;
-  --sidebar: #0a1a1d;
-  --sidebar-foreground: #e0f2f4;
-  --sidebar-primary: #22d3ee;
-  --sidebar-primary-foreground: #082f35;
-  --sidebar-accent: #132e33;
-  --sidebar-accent-foreground: #a7dbe3;
-  --sidebar-border: #1c3f45;
-  --sidebar-ring: #22d3ee;
+  --background: oklch(0.24 0.0036 106.64);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.238 0.0036 106.64);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0.0036 106.64);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(1 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.3 0.0036 106.64);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0.0036 106.64);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.32 0.0036 106.64);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.74 0.16 255);
+  --chart-1: oklch(0.488 0.243 264.376);
+  --chart-2: oklch(0.696 0.17 162.48);
+  --chart-3: oklch(0.769 0.188 70.08);
+  --chart-4: oklch(0.627 0.265 303.9);
+  --chart-5: oklch(0.645 0.246 16.439);
+  --sidebar: oklch(0.245 0.0036 106.64);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.488 0.243 264.376);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.29 0.0036 106.64);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.556 0 0);
+  font-weight: 300;
 }
 
 @layer base {
@@ -332,16 +357,16 @@
     top: 0;
     background: linear-gradient(
       45deg,
-      #0891b2,
-      #06b6d4,
-      #22d3ee,
-      #14b8a6,
-      #10b981,
-      #0891b2,
-      #06b6d4,
-      #22d3ee,
-      #14b8a6,
-      #10b981
+      #fb0094,
+      #0000ff,
+      #00ff00,
+      #ffff00,
+      #ff0000,
+      #fb0094,
+      #0000ff,
+      #00ff00,
+      #ffff00,
+      #ff0000
     );
     background-size: 400%;
     width: 100%;
@@ -377,19 +402,46 @@
   }
 
   .golden-text {
-    background: linear-gradient(135deg, #0891b2 0%, #22d3ee 50%, #06b6d4 100%);
+    background: linear-gradient(135deg, #d19e1d 0%, #e9c665 50%, #e3a812 100%);
     -webkit-background-clip: text;
     background-clip: text;
     -webkit-text-fill-color: transparent;
     text-fill-color: transparent;
   }
 
-  .medrix-gradient {
-    background: linear-gradient(135deg, #0891b2 0%, #06b6d4 40%, #14b8a6 100%);
+  /* KaTeX rendering polish for chat messages.
+     Keep this narrowly scoped to KaTeX classes so normal Markdown text is not
+     affected. Display equations can be wider than the chat column; horizontal
+     scrolling is safer than wrapping/corrupting matrices, aligned equations, or
+     long PGD/DDPM expressions. */
+  .katex {
+    font-size: 1.02em;
+    line-height: 1.35;
+    text-rendering: auto;
   }
 
-  .medrix-glow {
-    box-shadow: 0 0 20px rgba(8, 145, 178, 0.15), 0 0 40px rgba(8, 145, 178, 0.05);
+  .katex-display {
+    max-width: 100%;
+    overflow-x: auto;
+    padding: 0.35rem 0.125rem 0.45rem;
+    margin: 0.85rem 0;
+    text-align: center;
+  }
+
+  .katex-display > .katex {
+    display: inline-block;
+    max-width: 100%;
+    white-space: nowrap;
+    text-align: initial;
+  }
+
+  .katex-display::-webkit-scrollbar {
+    height: 6px;
+  }
+
+  .katex-display::-webkit-scrollbar-thumb {
+    background: color-mix(in oklch, var(--muted-foreground) 35%, transparent);
+    border-radius: 999px;
   }
 }
 

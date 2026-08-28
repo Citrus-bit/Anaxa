@@ -3,7 +3,6 @@ import { useEffect } from "react";
 
 import { useI18n } from "@/core/i18n/hooks";
 import type { AgentThreadState } from "@/core/threads";
-import { titleOfThreadState } from "@/core/threads/utils";
 
 import { useThreadChat } from "./chats";
 import { FlipDisplay } from "./flip-display";
@@ -18,12 +17,11 @@ export function ThreadTitle({
 }) {
   const { t } = useI18n();
   const { isNewThread } = useThreadChat();
-  const displayTitle = titleOfThreadState(thread.values);
   useEffect(() => {
     let _title = t.pages.untitled;
 
-    if (displayTitle !== "Untitled") {
-      _title = displayTitle;
+    if (thread.values?.title) {
+      _title = thread.values.title;
     } else if (isNewThread) {
       _title = t.pages.newChat;
     }
@@ -38,15 +36,15 @@ export function ThreadTitle({
     t.pages.untitled,
     t.pages.appName,
     thread.isThreadLoading,
-    displayTitle,
+    thread.values,
   ]);
 
-  if (displayTitle === "Untitled") {
+  if (!thread.values?.title) {
     return null;
   }
   return (
     <FlipDisplay uniqueKey={threadId}>
-      {displayTitle}
+      {thread.values.title ?? "Untitled"}
     </FlipDisplay>
   );
 }

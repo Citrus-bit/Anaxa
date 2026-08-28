@@ -84,6 +84,10 @@ vi.mock("@/core/i18n/hooks", () => ({
 }));
 
 vi.mock("@/core/tasks/context", () => ({
+  useSubtaskContext: () => ({
+    tasksRef: { current: {} },
+    setTasks: vi.fn(),
+  }),
   useUpdateSubtask: () => mocks.updateSubtask,
 }));
 
@@ -177,10 +181,7 @@ describe("useThreadStream", () => {
     expect(changed).not.toBe(first);
   });
 
-  it("records tool-start events so workflow can reconstruct decisions", async () => {
-    mocks.registerThreadRun.mockResolvedValue(undefined);
-    mocks.createRunEvent.mockResolvedValue(undefined);
-
+  it("does not request the unsupported LangGraph events stream", () => {
     renderHook(
       () =>
         useThreadStream({
@@ -194,55 +195,9 @@ describe("useThreadStream", () => {
       { wrapper },
     );
 
-    await act(async () => {
-      (capturedOptions?.onCreated as (meta: { thread_id: string; run_id: string }) => void)({
-        thread_id: "thread-1",
-        run_id: "run-1",
-      });
-      (
-        capturedOptions?.onLangChainEvent as (event: {
-          event: string;
-          name: string;
-          run_id?: string;
-          data?: unknown;
-        }) => void
-      )({
-        event: "on_tool_start",
-        name: "record_decision",
-        run_id: "decision-call-1",
-        data: {
-          input: {
-            title: "Choose benchmark discovery",
-            decision_type: "tool_selection",
-            rationale: "Need a benchmark map before experiments.",
-            next_step: "Run dataset_benchmark_discovery.",
-            status: "running",
-          },
-        },
-      });
-    });
-
-    await waitFor(() => {
-      expect(mocks.createRunEvent).toHaveBeenCalledWith(
-        "thread-1",
-        "run-1",
-        expect.objectContaining({
-          event_type: "ai_tool_calls",
-          caller: "assistant",
-          content: expect.objectContaining({
-            tool_calls: [
-              expect.objectContaining({
-                name: "record_decision",
-                id: "decision-call-1",
-                args: expect.objectContaining({
-                  title: "Choose benchmark discovery",
-                }),
-              }),
-            ],
-          }),
-        }),
-      );
-    });
+    expect(capturedOptions).not.toHaveProperty("onLangChainEvent");
+    expect(capturedOptions).toHaveProperty("onUpdateEvent");
+    expect(capturedOptions).toHaveProperty("onCustomEvent");
   });
 
   it("updates subtask heartbeat without persisting empty subagent events", async () => {

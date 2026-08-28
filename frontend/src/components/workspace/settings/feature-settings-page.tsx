@@ -135,7 +135,7 @@ function AgentFeatureCard({ agent }: { agent: FeatureAgent }) {
         <div className="min-w-0">
           <div className="truncate text-sm font-semibold">{agent.name}</div>
           <p className="text-muted-foreground mt-1 line-clamp-3 text-xs">
-            {agent.description || t.settings.features.noDescription}
+            {agent.description ?? t.settings.features.noDescription}
           </p>
         </div>
         <Badge variant={agent.kind === "system" ? "default" : "secondary"}>
@@ -167,7 +167,7 @@ function ToolFeatureCard({ tool }: { tool: FeatureTool }) {
         <div className="min-w-0">
           <div className="truncate text-sm font-semibold">{tool.name}</div>
           <p className="text-muted-foreground mt-1 line-clamp-3 text-xs">
-            {tool.description || t.settings.features.noDescription}
+            {tool.description ?? t.settings.features.noDescription}
           </p>
         </div>
         <Badge variant={tool.enabled ? "default" : "outline"}>
@@ -204,7 +204,7 @@ function SkillFeatureCard({ skill }: { skill: FeatureSkill }) {
         <div className="min-w-0">
           <div className="truncate text-sm font-semibold">{skill.name}</div>
           <p className="text-muted-foreground mt-1 line-clamp-3 text-xs">
-            {skill.description || t.settings.features.noDescription}
+            {skill.description ?? t.settings.features.noDescription}
           </p>
         </div>
         <Badge variant={skill.enabled ? "default" : "outline"}>

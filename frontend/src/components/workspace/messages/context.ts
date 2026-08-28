@@ -6,6 +6,7 @@ import type { AgentThreadState } from "@/core/threads";
 export interface ThreadContextType {
   thread: BaseStream<AgentThreadState>;
   isMock?: boolean;
+  /** Legacy composer callback kept for Anaxa integrations and tests. */
   sendMessage?: (text: string) => Promise<void>;
 }
 

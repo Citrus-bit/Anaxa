@@ -12,11 +12,14 @@ const LOCAL_AUTH_CONFIGURATION_ERROR =
   "MEDRIX_FLOW_UI_PASSWORD must be configured before serving protected routes in production.";
 
 function getConfiguredPassword(): string {
-  return env.MEDRIX_FLOW_UI_PASSWORD?.trim() ?? "";
+  const password = env.MEDRIX_FLOW_UI_PASSWORD?.trim();
+  return password?.length ? password : "";
 }
 
 function getSessionSigningMaterial(password: string): string {
-  return `${env.BETTER_AUTH_SECRET?.trim() ?? password}:${password}`;
+  const configuredSecret = env.BETTER_AUTH_SECRET?.trim();
+  const signingSecret = configuredSecret?.length ? configuredSecret : password;
+  return `${signingSecret}:${password}`;
 }
 
 export function isLocalAuthEnabled(): boolean {
@@ -63,7 +66,7 @@ export function isValidLocalAuthToken(value: string | null | undefined): boolean
   if (!expected) {
     return true;
   }
-  if (value?.length !== expected.length) {
+  if (typeof value !== "string" || value.length !== expected.length) {
     return false;
   }
   return timingSafeEqual(Buffer.from(value), Buffer.from(expected));
@@ -85,7 +88,8 @@ function getProxyAuthSigningSecret(): string {
   // Only BETTER_AUTH_SECRET — never fall back to the user password, otherwise the
   // proxy token becomes directly derivable from the UI password and anyone who
   // knows it can forge nginx-bypass tokens against the gateway.
-  return env.BETTER_AUTH_SECRET?.trim() ?? "";
+  const signingSecret = env.BETTER_AUTH_SECRET?.trim();
+  return signingSecret?.length ? signingSecret : "";
 }
 
 export function getProxyAuthorizationToken(): string | null {
@@ -103,7 +107,7 @@ export function isValidAdminAccessToken(value: string | null | undefined): boole
   if (!expected) {
     return false;
   }
-  if (value?.length !== expected.length) {
+  if (typeof value !== "string" || value.length !== expected.length) {
     return false;
   }
   return timingSafeEqual(Buffer.from(value), Buffer.from(expected));

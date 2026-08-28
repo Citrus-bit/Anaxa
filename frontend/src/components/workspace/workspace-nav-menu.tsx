@@ -1,8 +1,11 @@
 "use client";
 
 import {
+  BugIcon,
   ChevronsUpDown,
-  LanguagesIcon,
+  GlobeIcon,
+  InfoIcon,
+  MailIcon,
   Settings2Icon,
   SettingsIcon,
 } from "lucide-react";
@@ -22,16 +25,10 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar";
-import { Tooltip } from "@/components/workspace/tooltip";
-import type { Locale } from "@/core/i18n";
 import { useI18n } from "@/core/i18n/hooks";
-import {
-  OPEN_SETTINGS_EVENT,
-  type OpenSettingsDetail,
-} from "@/core/settings/events";
 
 import { GithubIcon } from "./github-icon";
-import { SettingsDialog } from "./settings";
+import { useSettingsDialog } from "./settings";
 
 function NavMenuButtonContent({
   isSidebarOpen,
@@ -53,83 +50,19 @@ function NavMenuButtonContent({
   );
 }
 
-const SETUP_PROMPT_SESSION_KEY = "medrix_flow.setup-prompted";
-const nextLocale: Record<Locale, Locale> = {
-  "en-US": "zh-CN",
-  "zh-CN": "en-US",
-};
-
 export function WorkspaceNavMenu() {
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  const [settingsDefaultSection, setSettingsDefaultSection] = useState<
-    "setup" | "features" | "notification"
-  >("setup");
+  const { openSettings } = useSettingsDialog();
   const [mounted, setMounted] = useState(false);
   const { open: isSidebarOpen } = useSidebar();
-  const { t, locale, changeLocale } = useI18n();
+  const { t } = useI18n();
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
-  useEffect(() => {
-    const handler = (e: Event) => {
-      const detail = (e as CustomEvent<OpenSettingsDetail>).detail;
-      setSettingsDefaultSection(detail?.section ?? "setup");
-      setSettingsOpen(true);
-    };
-    window.addEventListener(OPEN_SETTINGS_EVENT, handler);
-    return () => window.removeEventListener(OPEN_SETTINGS_EVENT, handler);
-  }, []);
-
-  // Auto-open settings on "setup" tab to remind users to configure model/API
-  // Triggers once per browser session (tracked via sessionStorage)
-  // Delayed by 600ms so users see the main UI first (less jarring)
-  useEffect(() => {
-    if (!mounted) return;
-    const alreadyPrompted = sessionStorage.getItem(SETUP_PROMPT_SESSION_KEY);
-    if (!alreadyPrompted) {
-      const timer = setTimeout(() => {
-        sessionStorage.setItem(SETUP_PROMPT_SESSION_KEY, "1");
-        setSettingsDefaultSection("setup");
-        setSettingsOpen(true);
-      }, 600);
-      return () => clearTimeout(timer);
-    }
-  }, [mounted]);
-
   return (
     <>
-      <SettingsDialog
-        open={settingsOpen}
-        onOpenChange={setSettingsOpen}
-        defaultSection={settingsDefaultSection}
-      />
       <SidebarMenu className="w-full">
-        <SidebarMenuItem>
-          <Tooltip
-            content={
-              locale === "zh-CN"
-                ? t.workspace.switchToEnglish
-                : t.workspace.switchToChinese
-            }
-          >
-            <SidebarMenuButton
-              type="button"
-              onClick={() => changeLocale(nextLocale[locale])}
-              className="text-muted-foreground"
-            >
-              <LanguagesIcon className="size-4" />
-              {isSidebarOpen && (
-                <span>
-                  {locale === "zh-CN"
-                    ? t.workspace.languageEnglish
-                    : t.workspace.languageChinese}
-                </span>
-              )}
-            </SidebarMenuButton>
-          </Tooltip>
-        </SidebarMenuItem>
         <SidebarMenuItem>
           {mounted ? (
             <DropdownMenu>
@@ -149,8 +82,7 @@ export function WorkspaceNavMenu() {
                 <DropdownMenuGroup>
                   <DropdownMenuItem
                     onClick={() => {
-                      setSettingsDefaultSection("setup");
-                      setSettingsOpen(true);
+                      openSettings("appearance");
                     }}
                   >
                     <Settings2Icon />
@@ -158,7 +90,17 @@ export function WorkspaceNavMenu() {
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <a
-                    href="https://github.com/Citrus-bit/medrix-flow"
+                    href="https://deerflow.tech/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <DropdownMenuItem>
+                      <GlobeIcon />
+                      {t.workspace.officialWebsite}
+                    </DropdownMenuItem>
+                  </a>
+                  <a
+                    href="https://github.com/bytedance/deer-flow"
                     target="_blank"
                     rel="noopener noreferrer"
                   >
@@ -167,7 +109,33 @@ export function WorkspaceNavMenu() {
                       {t.workspace.visitGithub}
                     </DropdownMenuItem>
                   </a>
+                  <DropdownMenuSeparator />
+                  <a
+                    href="https://github.com/bytedance/deer-flow/issues"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <DropdownMenuItem>
+                      <BugIcon />
+                      {t.workspace.reportIssue}
+                    </DropdownMenuItem>
+                  </a>
+                  <a href="mailto:support@deerflow.tech">
+                    <DropdownMenuItem>
+                      <MailIcon />
+                      {t.workspace.contactUs}
+                    </DropdownMenuItem>
+                  </a>
                 </DropdownMenuGroup>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={() => {
+                    openSettings("about");
+                  }}
+                >
+                  <InfoIcon />
+                  {t.workspace.about}
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           ) : (

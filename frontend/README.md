@@ -1,12 +1,6 @@
-# MedrixFlow Frontend
+# DeerFlow Frontend
 
-Like the original MedrixFlow 1.0, we would love to give the community a minimalistic and easy-to-use web interface with a more modern and flexible architecture.
-
-This frontend is responsible for the current MedrixFlow interaction model:
-
-- model capabilities are discovered from backend config flags such as `supports_thinking`, `supports_reasoning_effort`, and `supports_vision`
-- the chat composer exposes `flash / pro / ultra`, which currently map to `medium / high / xhigh` reasoning effort
-- clarification requests are rendered as button-based choices with a final `type something` fallback for free-form input
+Like the original DeerFlow 1.0, we would love to give the community a minimalistic and easy-to-use web interface with a more modern and flexible architecture.
 
 ## Tech Stack
 
@@ -38,20 +32,35 @@ cp .env.example .env
 # Start development server
 pnpm dev
 
-# The app will be available at http://localhost:6201
+# The app will be available at http://localhost:3000
 ```
 
-### Build
+### Build & Test
 
 ```bash
 # Type check
 pnpm typecheck
 
+# Check formatting
+pnpm format
+
+# Apply formatting
+pnpm format:write
+
 # Lint
 pnpm lint
 
+# Run unit tests
+pnpm test
+
+# One-time setup: install Playwright Chromium browser
+pnpm exec playwright install chromium
+
+# Run E2E tests (builds and starts production server automatically)
+pnpm test:e2e
+
 # Build for production
-BETTER_AUTH_SECRET=local-dev-secret pnpm build
+pnpm build
 
 # Start production server
 pnpm start
@@ -73,24 +82,22 @@ pnpm start
 Key environment variables (see `.env.example` for full list):
 
 ```bash
-# Required in production when the UI is exposed through nginx
-MEDRIX_FLOW_ENV=production
-MEDRIX_FLOW_UI_PASSWORD=choose-a-strong-password
-# Optional extra token for scripted access to protected `/api/*` routes
-MEDRIX_GATEWAY_ADMIN_TOKEN=choose-a-separate-admin-token
-
-# Backend API URLs (optional, uses nginx proxy by default)
-NEXT_PUBLIC_BACKEND_BASE_URL="http://localhost:6202"
-# LangGraph API URLs (optional, uses nginx proxy by default)
-NEXT_PUBLIC_LANGGRAPH_BASE_URL="http://localhost:6203"
+# Backend API URL (optional, uses local Next.js/nginx proxy by default)
+NEXT_PUBLIC_BACKEND_BASE_URL="http://localhost:8001"
+# LangGraph-compatible API URL (optional, uses local Next.js/nginx proxy by default)
+NEXT_PUBLIC_LANGGRAPH_BASE_URL="http://localhost:8001/api"
 ```
 
 ## Project Structure
 
 ```
+tests/
+├── e2e/                    # E2E tests (Playwright, Chromium, mocked backend)
+└── unit/                   # Unit tests (mirrors src/ layout)
 src/
 ├── app/                    # Next.js App Router pages
 │   ├── api/                # API routes
+│   ├── showcase/           # Allowlisted public read-only demos
 │   ├── workspace/          # Main workspace pages
 │   └── mock/               # Mock/demo pages
 ├── components/             # React components
@@ -113,22 +120,26 @@ src/
 │   └── utils/              # Utility functions
 ├── hooks/                  # Custom React hooks
 ├── lib/                    # Shared libraries & utilities
-├── server/                 # Server-side code (Not available yet)
-│   └── better-auth/        # Authentication setup (Not available yet)
+├── server/                 # Server-side code
+│   └── better-auth/        # Authentication setup and session helpers
 └── styles/                 # Global styles
 ```
 
 ## Scripts
 
-| Command | Description |
-|---------|-------------|
-| `pnpm dev` | Start development server with Turbopack |
-| `pnpm build` | Build for production |
-| `pnpm start` | Start production server |
-| `pnpm lint` | Run ESLint |
-| `pnpm lint:fix` | Fix ESLint issues |
-| `pnpm typecheck` | Run TypeScript type checking |
-| `pnpm check` | Run both lint and typecheck |
+| Command             | Description                             |
+| ------------------- | --------------------------------------- |
+| `pnpm dev`          | Start development server with Turbopack |
+| `pnpm build`        | Build for production                    |
+| `pnpm start`        | Start production server                 |
+| `pnpm test`         | Run unit tests with Rstest              |
+| `pnpm test:e2e`     | Run E2E tests with Playwright           |
+| `pnpm format`       | Check formatting with Prettier          |
+| `pnpm format:write` | Apply formatting with Prettier          |
+| `pnpm lint`         | Run ESLint                              |
+| `pnpm lint:fix`     | Fix ESLint issues                       |
+| `pnpm typecheck`    | Run TypeScript type checking            |
+| `pnpm check`        | Run both lint and typecheck             |
 
 ## Development Notes
 
@@ -136,9 +147,6 @@ src/
 - Turbopack enabled by default in development for faster builds
 - Environment validation can be skipped with `SKIP_ENV_VALIDATION=1` (useful for Docker)
 - Backend API URLs are optional; nginx proxy is used by default in development
-- `pnpm build` is most reliable when `BETTER_AUTH_SECRET` is explicitly set
-- In production, protected workspace/API mode fails closed unless `MEDRIX_FLOW_UI_PASSWORD` is configured
-- when running the full stack from the repo root with `make dev`, the unified local entrypoint is `http://localhost:6200`
 
 ## License
 
