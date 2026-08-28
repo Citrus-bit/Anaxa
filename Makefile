@@ -1,80 +1,114 @@
-# Anaxa - Unified Development Environment
+# DeerFlow - Unified Development Environment
 
-.PHONY: help bootstrap config setup doctor config-upgrade check install verify release-check dev dev-daemon start stop up down clean clean-cache docker-init docker-start docker-stop docker-logs docker-logs-frontend docker-logs-gateway
+.PHONY: help bootstrap config config-upgrade check check-agent-guidance install extension-install extension-list extension-enable extension-disable extension-remove setup doctor support-bundle detect-thread-boundaries detect-blocking-io verify release-check dev dev-daemon start start-daemon nginx stop up down clean clean-cache docker-init docker-start docker-stop docker-logs docker-logs-frontend docker-logs-gateway docker-logs-redis setup-sandbox
 
-PYTHON ?= python3
+BASH ?= bash
+BACKEND_UV_RUN = cd backend && uv run
+
+# Detect OS for Windows compatibility
+ifeq ($(OS),Windows_NT)
+    SHELL := cmd.exe
+    PYTHON ?= python
+    # Run repo shell scripts through Git Bash when Make is launched from cmd.exe / PowerShell.
+    RUN_WITH_GIT_BASH = call scripts\run-with-git-bash.cmd
+else
+    PYTHON ?= python3
+    RUN_WITH_GIT_BASH =
+endif
+
+FRONTEND_PNPM = $(PYTHON) ../scripts/pnpm.py
 
 help:
-	@echo "Anaxa Development Commands:"
-	@echo "  make bootstrap       - First-time setup: check tools, create local config, install dependencies"
+	@echo "Anaxa / DeerFlow Development Commands:"
+	@echo "  make bootstrap       - First-time setup: check tools, create config, install dependencies"
+	@echo "  make setup           - Interactive setup wizard (recommended for new users)"
+	@echo "  make doctor          - Check configuration and system requirements"
+	@echo "  make support-bundle  - Create a redacted issue summary, AI draft, and evidence bundle"
 	@echo "  make config          - Generate local config files (aborts if config already exists)"
-	@echo "  make setup           - Idempotent local setup wizard (creates missing config/env files)"
-	@echo "  make doctor          - Validate config, env vars, sandbox prerequisites, and DB writability"
 	@echo "  make config-upgrade  - Merge new fields from config.example.yaml into config.yaml"
 	@echo "  make check           - Check if all required tools are installed"
-	@echo "  make install         - Install all dependencies (frontend + backend dev group)"
-	@echo "  make verify          - Run local checks aligned with CI (backend lint/test + frontend lint/typecheck)"
+	@echo "  make check-agent-guidance - Validate scoped AGENTS.md file and chain budgets"
+	@echo "  make detect-thread-boundaries - Inventory backend executor/thread/event-loop boundaries"
+	@echo "  make detect-blocking-io        - Inventory blocking IO that may block the backend event loop"
+	@echo "  make install         - Install all dependencies (frontend + backend + pre-commit hooks)"
+	@echo "  make verify          - Run backend and frontend lint, tests, and build checks"
 	@echo "  make release-check   - Check that local secrets/runtime data are not tracked or staged"
+	@echo "  make extension-install SOURCE=... - Install and enable a trusted Python extension"
+	@echo "  make extension-list              - List configured Python extensions"
+	@echo "  make extension-enable NAME=...   - Enable an installed extension"
+	@echo "  make extension-disable NAME=...  - Disable an extension without uninstalling it"
+	@echo "  make extension-remove NAME=...   - Uninstall a managed extension"
+	@echo "  make setup-sandbox   - Pre-pull sandbox container image (recommended)"
 	@echo "  make dev             - Start all services in development mode (with hot-reloading)"
-	@echo "  make dev-daemon      - Start all services in background (daemon mode)"
+	@echo "  make dev-daemon      - Start dev services in background (daemon mode)"
 	@echo "  make start           - Start all services in production mode (optimized, no hot-reloading)"
+	@echo "  make start-daemon    - Start prod services in background (daemon mode)"
+	@echo "  make nginx           - Start nginx alone in the foreground (local dev config)"
 	@echo "  make stop            - Stop all running services"
 	@echo "  make clean           - Clean up processes and temporary files"
-	@echo "  make clean-cache     - Remove safe regenerated caches, keep local data and dependencies"
+	@echo "  make clean-cache     - Remove regenerated caches while keeping runtime data"
 	@echo ""
 	@echo "Docker Production Commands:"
-	@echo "  make up              - Build and start production Docker services (localhost:6200)"
+	@echo "  make up              - Build and start production Docker services (localhost:2026)"
 	@echo "  make down            - Stop and remove production Docker containers"
 	@echo ""
 	@echo "Docker Development Commands:"
 	@echo "  make docker-init     - Pull the sandbox image"
-	@echo "  make docker-start    - Start Docker services (mode-aware from config.yaml, localhost:6200)"
+	@echo "  make docker-start    - Start Docker services (mode-aware from config.yaml, localhost:2026)"
 	@echo "  make docker-stop     - Stop Docker development services"
 	@echo "  make docker-logs     - View Docker development logs"
 	@echo "  make docker-logs-frontend - View Docker frontend logs"
 	@echo "  make docker-logs-gateway - View Docker gateway logs"
+	@echo "  make docker-logs-redis - View Docker Redis logs"
 
+## Setup & Diagnosis
 bootstrap:
 	@echo "=========================================="
 	@echo "  Anaxa First-Time Bootstrap"
 	@echo "=========================================="
-	@echo ""
 	@$(PYTHON) ./scripts/check.py
-	@echo ""
-	@cd backend && uv run python ../scripts/setup_wizard.py
-	@echo ""
+	@$(MAKE) setup
 	@$(MAKE) install
-	@echo ""
-	@echo "=========================================="
-	@echo "  ✓ Bootstrap complete"
-	@echo "=========================================="
-	@echo "Next:"
-	@echo "  1. make dev"
-	@echo "  2. Open http://localhost:6200"
-	@echo "  3. Configure your model/API keys in Settings & More -> Setup"
+	@echo "✓ Bootstrap complete"
+	@echo "Next: make dev, then open http://localhost:2026"
+
+setup:
+	@$(BACKEND_UV_RUN) python ../scripts/setup_wizard.py
+
+doctor:
+	@$(BACKEND_UV_RUN) python ../scripts/doctor.py
+
+support-bundle:
+	@$(BACKEND_UV_RUN) python ../scripts/support_bundle.py --include-doctor
+
+detect-thread-boundaries:
+	@$(BACKEND_UV_RUN) python ../scripts/detect_thread_boundaries.py --json-output ../.deer-flow/thread-boundary-inventory.json
+
+detect-blocking-io:
+	@$(MAKE) -C backend detect-blocking-io
 
 config:
 	@$(PYTHON) ./scripts/configure.py
 
-setup:
-	@cd backend && uv run python ../scripts/setup_wizard.py
-
-doctor:
-	@cd backend && uv run python ../scripts/doctor.py
-
 config-upgrade:
-	@./scripts/config-upgrade.sh
+	@$(RUN_WITH_GIT_BASH) ./scripts/config-upgrade.sh
 
 # Check required tools
 check:
 	@$(PYTHON) ./scripts/check.py
 
+check-agent-guidance:
+	@$(PYTHON) ./scripts/check_agent_guidance.py
+
 # Install all dependencies
 install:
 	@echo "Installing backend dependencies..."
-	@cd backend && uv sync --group dev
+	@cd backend && uv sync --locked
 	@echo "Installing frontend dependencies..."
-	@cd frontend && pnpm install
+	@cd frontend && $(FRONTEND_PNPM) install
+	@echo "Installing pre-commit hooks..."
+	@uv tool install pre-commit
+	@pre-commit install --overwrite
 	@echo "✓ All dependencies installed"
 	@echo ""
 	@echo "=========================================="
@@ -87,102 +121,79 @@ install:
 
 verify:
 	@echo "Running backend checks (lint + test)..."
-	@cd backend && make lint && make test
+	@cd backend && $(MAKE) lint && $(MAKE) test
 	@echo "Running frontend checks (lint + typecheck + unit tests)..."
-	@cd frontend && pnpm lint && pnpm typecheck && pnpm test:unit
+	@cd frontend && $(FRONTEND_PNPM) lint && $(FRONTEND_PNPM) typecheck && $(FRONTEND_PNPM) test
 	@echo "Running frontend build check..."
-	@cd frontend && BETTER_AUTH_SECRET=local-dev-secret pnpm build
+	@cd frontend && BETTER_AUTH_SECRET=local-dev-secret $(FRONTEND_PNPM) build
 	@echo "✓ Verification checks passed"
 
 release-check:
 	@$(PYTHON) ./scripts/release_check.py
 
+extension-install: export DEER_FLOW_EXTENSION_SOURCE := $(value SOURCE)
+extension-install:
+	$(if $(and $(filter command line,$(origin SOURCE)),$(strip $(value SOURCE))),,$(error usage: make extension-install SOURCE=<package|git-url|dir>))
+	@cd backend && uv run --frozen --no-group extensions deerflow extensions install --source-env __deerflow_extension_source__
+
+extension-list:
+	@cd backend && uv run --frozen --no-group extensions deerflow extensions list
+
+extension-enable: export DEER_FLOW_EXTENSION_NAME := $(value NAME)
+extension-enable:
+	$(if $(and $(filter command line,$(origin NAME)),$(strip $(value NAME))),,$(error usage: make extension-enable NAME=<extension>))
+	@cd backend && uv run --frozen --no-group extensions deerflow extensions enable --name-env __deerflow_extension_name__
+
+extension-disable: export DEER_FLOW_EXTENSION_NAME := $(value NAME)
+extension-disable:
+	$(if $(and $(filter command line,$(origin NAME)),$(strip $(value NAME))),,$(error usage: make extension-disable NAME=<extension>))
+	@cd backend && uv run --frozen --no-group extensions deerflow extensions disable --name-env __deerflow_extension_name__
+
+extension-remove: export DEER_FLOW_EXTENSION_NAME := $(value NAME)
+extension-remove:
+	$(if $(and $(filter command line,$(origin NAME)),$(strip $(value NAME))),,$(error usage: make extension-remove NAME=<extension>))
+	@cd backend && uv run --frozen --no-group extensions deerflow extensions remove --name-env __deerflow_extension_name__
+
 # Pre-pull sandbox Docker image (optional but recommended)
 setup-sandbox:
-	@echo "=========================================="
-	@echo "  Pre-pulling Sandbox Container Image"
-	@echo "=========================================="
-	@echo ""
-	@IMAGE=$$(grep -A 20 "# sandbox:" config.yaml 2>/dev/null | grep "image:" | awk '{print $$2}' | head -1); \
-	if [ -z "$$IMAGE" ]; then \
-		IMAGE="enterprise-public-cn-beijing.cr.volces.com/vefaas-public/all-in-one-sandbox:latest"; \
-		echo "Using default image: $$IMAGE"; \
-	else \
-		echo "Using configured image: $$IMAGE"; \
-	fi; \
-	echo ""; \
-	if command -v container >/dev/null 2>&1 && [ "$$(uname)" = "Darwin" ]; then \
-		echo "Detected Apple Container on macOS, pulling image..."; \
-		container pull "$$IMAGE" || echo "⚠ Apple Container pull failed, will try Docker"; \
-	fi; \
-	if command -v docker >/dev/null 2>&1; then \
-		echo "Pulling image using Docker..."; \
-		if docker pull "$$IMAGE"; then \
-			echo ""; \
-			echo "✓ Sandbox image pulled successfully"; \
-		else \
-			echo ""; \
-			echo "⚠ Failed to pull sandbox image (this is OK for local sandbox mode)"; \
-		fi; \
-	else \
-		echo "✗ Neither Docker nor Apple Container is available"; \
-		echo "  Please install Docker: https://docs.docker.com/get-docker/"; \
-		exit 1; \
-	fi
+	@$(RUN_WITH_GIT_BASH) ./scripts/setup-sandbox.sh
 
 # Start all services in development mode (with hot-reloading)
 dev:
-	@./scripts/serve.sh --dev
+	@$(PYTHON) ./scripts/check.py
+	@$(RUN_WITH_GIT_BASH) ./scripts/serve.sh --dev
 
 # Start all services in production mode (with optimizations)
 start:
-	@./scripts/serve.sh --prod
+	@$(PYTHON) ./scripts/check.py
+	@$(RUN_WITH_GIT_BASH) ./scripts/serve.sh --prod
 
 # Start all services in daemon mode (background)
 dev-daemon:
-	@./scripts/start-daemon.sh
+	@$(PYTHON) ./scripts/check.py
+	@$(RUN_WITH_GIT_BASH) ./scripts/serve.sh --dev --daemon
+
+# Start prod services in daemon mode (background)
+start-daemon:
+	@$(PYTHON) ./scripts/check.py
+	@$(RUN_WITH_GIT_BASH) ./scripts/serve.sh --prod --daemon
+
+# Start nginx alone in the foreground with the local dev config
+nginx:
+	@$(RUN_WITH_GIT_BASH) ./scripts/nginx.sh
 
 # Stop all services
 stop:
-	@echo "Stopping all services..."
-	@-pkill -f "langgraph dev" 2>/dev/null || true
-	@-pkill -f "uvicorn app.gateway.app:app" 2>/dev/null || true
-	@-pkill -f "next dev" 2>/dev/null || true
-	@-pkill -f "next start" 2>/dev/null || true
-	@-pkill -f "next-server" 2>/dev/null || true
-	@-nginx -c $(PWD)/docker/nginx/nginx.local.conf -p $(PWD) -s quit 2>/dev/null || true
-	@sleep 1
-	@-pkill -9 nginx 2>/dev/null || true
-	@-lsof -ti :6203 | xargs kill -9 2>/dev/null || true
-	@-lsof -ti :6202 | xargs kill -9 2>/dev/null || true
-	@-lsof -ti :6201 | xargs kill -9 2>/dev/null || true
-	@echo "Cleaning up sandbox containers..."
-	@-./scripts/cleanup-containers.sh medrix-flow-sandbox 2>/dev/null || true
-	@echo "✓ All services stopped"
+	@$(RUN_WITH_GIT_BASH) ./scripts/serve.sh --stop
 
-# Clean up safe regenerated caches. This intentionally keeps backend/.medrix-flow,
-# backend/.venv, and frontend/node_modules.
+# Clean up regenerated files without deleting runtime data.
 clean-cache:
 	@echo "Cleaning safe regenerated caches..."
-	@-rm -rf frontend/.next 2>/dev/null || true
-	@-rm -rf logs 2>/dev/null || true
-	@-rm -rf .code-review-graph 2>/dev/null || true
-	@-rm -rf backend/.pytest_cache backend/.ruff_cache 2>/dev/null || true
-	@-rm -rf frontend/.pytest_cache frontend/.ruff_cache 2>/dev/null || true
+	@-rm -rf frontend/.next logs .code-review-graph 2>/dev/null || true
+	@-rm -rf backend/.pytest_cache backend/.ruff_cache frontend/.pytest_cache frontend/.ruff_cache 2>/dev/null || true
 	@-find backend frontend scripts -type d -name "__pycache__" -prune -exec rm -rf {} + 2>/dev/null || true
-	@echo "Retained: backend/.medrix-flow, backend/.venv, frontend/node_modules"
-	@echo "Current size summary:"
-	@-du -sh . 2>/dev/null || true
-	@-for path in frontend/.next frontend/node_modules backend/.venv backend/.medrix-flow logs .code-review-graph; do \
-		if [ -e "$$path" ]; then \
-			du -sh "$$path"; \
-		else \
-			echo "0B	$$path (absent)"; \
-		fi; \
-	done
-	@echo "✓ Cache cleanup complete"
+	@echo "Retained: backend/.deer-flow, backend/.medrix-flow, backend/.venv, frontend/node_modules"
 
-# Clean up
 clean: stop clean-cache
 	@echo "✓ Cleanup complete"
 
@@ -192,25 +203,27 @@ clean: stop clean-cache
 
 # Initialize Docker containers and install dependencies
 docker-init:
-	@./scripts/docker.sh init
+	@$(RUN_WITH_GIT_BASH) ./scripts/docker.sh init
 
 # Start Docker development environment
 docker-start:
-	@./scripts/docker.sh start
+	@$(RUN_WITH_GIT_BASH) ./scripts/docker.sh start
 
 # Stop Docker development environment
 docker-stop:
-	@./scripts/docker.sh stop
+	@$(RUN_WITH_GIT_BASH) ./scripts/docker.sh stop
 
 # View Docker development logs
 docker-logs:
-	@./scripts/docker.sh logs
+	@$(RUN_WITH_GIT_BASH) ./scripts/docker.sh logs
 
 # View Docker development logs
 docker-logs-frontend:
-	@./scripts/docker.sh logs --frontend
+	@$(RUN_WITH_GIT_BASH) ./scripts/docker.sh logs --frontend
 docker-logs-gateway:
-	@./scripts/docker.sh logs --gateway
+	@$(RUN_WITH_GIT_BASH) ./scripts/docker.sh logs --gateway
+docker-logs-redis:
+	@$(RUN_WITH_GIT_BASH) ./scripts/docker.sh logs --redis
 
 # ==========================================
 # Production Docker Commands
@@ -218,8 +231,8 @@ docker-logs-gateway:
 
 # Build and start production services
 up:
-	@./scripts/deploy.sh
+	@$(RUN_WITH_GIT_BASH) ./scripts/deploy.sh
 
 # Stop and remove production containers
 down:
-	@./scripts/deploy.sh down
+	@$(RUN_WITH_GIT_BASH) ./scripts/deploy.sh down

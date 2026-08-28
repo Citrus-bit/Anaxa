@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Export Claude Code OAuth credentials from macOS Keychain on purpose.
 
-This helper is intentionally manual. MedrixFlow runtime does not probe Keychain.
+This helper is intentionally manual. DeerFlow runtime does not probe Keychain.
 Use this script when you want to bridge an existing Claude Code login into an
-environment variable or an exported credentials file for MedrixFlow.
+environment variable or an exported credentials file for DeerFlow.
 """
 
 from __future__ import annotations
@@ -92,7 +92,7 @@ def write_credentials_file(output_path: Path, data: dict[str, Any]) -> None:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Manually export Claude Code OAuth credentials from macOS Keychain for MedrixFlow.",
+        description="Manually export Claude Code OAuth credentials from macOS Keychain for DeerFlow.",
     )
     parser.add_argument(
         "--service",

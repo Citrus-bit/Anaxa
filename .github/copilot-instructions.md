@@ -1,14 +1,14 @@
-# Copilot Onboarding Instructions for MedrixFlow
+# Copilot Onboarding Instructions for Anaxa (DeerFlow runtime)
 
 Use this file as the default operating guide for this repository. Follow it first, and only search the codebase when this file is incomplete or incorrect.
 
 ## 1) Repository Summary
 
-MedrixFlow is a full-stack "super agent harness".
+Anaxa is a research workspace built on the DeerFlow full-stack "super agent harness".
 
-- Backend: Python 3.12, LangGraph + FastAPI gateway, sandbox/tool system, memory, MCP integration.
+- Backend: Python 3.12, DeerFlow agent runtime embedded in a FastAPI gateway, sandbox/tool system, memory, and MCP integration.
 - Frontend: Next.js 16 + React 19 + TypeScript + pnpm.
-- Local dev entrypoint: root `Makefile` starts backend + frontend + nginx on `http://localhost:6200`.
+- Local dev entrypoint: root `Makefile` starts the gateway, frontend, and nginx on `http://localhost:2026`.
 - Docker dev entrypoint: `make docker-*` (mode-aware provisioner startup from `config.yaml`).
 
 Current repo footprint is medium-large (backend service, frontend app, docker stack, skills library, docs).
@@ -100,9 +100,11 @@ make dev
 Behavior:
 
 - Stops existing local services first.
-- Starts LangGraph (`6203`), Gateway (`6202`), Frontend (`6201`), nginx (`6200`).
-- Unified app endpoint: `http://localhost:6200`.
-- Logs: `logs/langgraph.log`, `logs/gateway.log`, `logs/frontend.log`, `logs/nginx.log`.
+- Starts the Gateway (`8001`, with the embedded LangGraph-compatible runtime),
+  Frontend (`3000`), and nginx (`2026`). There is no standalone LangGraph
+  service.
+- Unified app endpoint: `http://localhost:2026`.
+- Logs: `logs/gateway.log`, `logs/frontend.log`, `logs/nginx.log`.
 
 Stop services:
 
@@ -149,12 +151,13 @@ Root-level orchestration and config:
 
 Backend core:
 
-- `backend/packages/harness/medrix_flow/agents/` - lead agent, middleware chain, memory
+- `backend/packages/harness/deerflow/agents/` - primary lead agent, middleware chain, memory
+- `backend/packages/harness/medrix_flow/` - Anaxa compatibility sidecar and legacy research APIs
 - `backend/app/gateway/` - FastAPI gateway API
-- `backend/packages/harness/medrix_flow/sandbox/` - sandbox provider + tool wrappers
-- `backend/packages/harness/medrix_flow/subagents/` - subagent registry/execution
-- `backend/packages/harness/medrix_flow/mcp/` - MCP integration
-- `backend/langgraph.json` - graph entrypoint (`medrix_flow.agents:make_lead_agent`)
+- `backend/packages/harness/deerflow/sandbox/` - sandbox provider + tool wrappers
+- `backend/packages/harness/deerflow/subagents/` - subagent registry/execution
+- `backend/packages/harness/deerflow/mcp/` - MCP integration
+- `backend/langgraph.json` - graph entrypoint (`deerflow.agents:make_lead_agent`)
 - `backend/pyproject.toml` - Python deps and `requires-python`
 - `backend/ruff.toml` - lint/format policy
 - `backend/tests/` - backend unit and integration-like tests
@@ -181,7 +184,7 @@ Before submitting changes, run at minimum:
 - Frontend (if touched): `cd frontend && pnpm lint && pnpm typecheck`
 - Frontend build when changing env/auth/routing/build-sensitive files: `BETTER_AUTH_SECRET=... pnpm build`
 
-If touching orchestration/config (`Makefile`, `docker/*`, `config*.yaml`), also run `make dev` and verify the four services start.
+If touching orchestration/config (`Makefile`, `docker/*`, `config*.yaml`), also run `make dev` and verify the three local services start.
 
 ## 7) Non-Obvious Dependencies and Gotchas
 

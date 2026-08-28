@@ -1,0 +1,50 @@
+name: Sync Upstream Main
+
+"on":
+  schedule:
+    - cron: "0 3 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-upstream-main
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Fetch origin and upstream
+        run: |
+          if git remote get-url upstream >/dev/null 2>&1; then
+            git remote set-url upstream https://github.com/bytedance/deer-flow.git
+          else
+            git remote add upstream https://github.com/bytedance/deer-flow.git
+          fi
+          git fetch origin main
+          git fetch upstream main
+
+      - name: Sync origin/main to upstream/main
+        run: |
+          ORIGIN_SHA=$(git rev-parse origin/main)
+          UPSTREAM_SHA=$(git rev-parse upstream/main)
+
+          if [ "$ORIGIN_SHA" = "$UPSTREAM_SHA" ]; then
+            echo "origin/main is already up to date"
+            exit 0
+          fi
+
+          git checkout -B main "$ORIGIN_SHA"
+          git reset --hard "$UPSTREAM_SHA"
+          git push --force-with-lease=refs/heads/main:"$ORIGIN_SHA" origin HEAD:main

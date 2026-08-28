@@ -1,40 +1,47 @@
-# MedrixFlow Sandbox Provisioner
+# DeerFlow Sandbox Provisioner
 
-The **Sandbox Provisioner** is a FastAPI service that dynamically manages sandbox Pods in Kubernetes. It provides a REST API for the MedrixFlow backend to create, monitor, and destroy isolated sandbox environments for code execution.
+The **Sandbox Provisioner** is a FastAPI service that dynamically manages sandbox Pods in Kubernetes. It provides a REST API for the DeerFlow backend to create, monitor, and destroy isolated sandbox environments for code execution.
 
 ## Architecture
 
 ```
 ┌────────────┐  HTTP  ┌─────────────┐  K8s API  ┌──────────────┐
 │  Backend   │ ─────▸ │ Provisioner │ ────────▸ │  Host K8s    │
-│  (gateway/ │        │   :6204     │           │  API Server  │
+│  (gateway/ │        │   :8002     │           │  API Server  │
 │ langgraph) │        └─────────────┘           └──────┬───────┘
 └────────────┘                                          │ creates
                                                         │
                           ┌─────────────┐         ┌────▼─────┐
                           │   Backend   │ ──────▸ │  Sandbox │
-                          │ (via Docker │ NodePort│  Pod(s)  │
-                          │   network)  │         └──────────┘
+                          │ (NodePort   │ or DNS  │  Pod(s)  │
+                          │  /ClusterIP)│         └──────────┘
                           └─────────────┘
 ```
 
 ### How It Works
 
-1. **Backend Request**: When the backend needs to execute code, it sends a `POST /api/sandboxes` request with a `sandbox_id` and `thread_id`.
+1. **Backend Request**: When the backend needs to execute code, it sends a `POST /api/sandboxes` request with a `sandbox_id`, `thread_id`, and optional `user_id`.
 
-2. **Pod Creation**: The provisioner creates a dedicated Pod in the `medrix-flow` namespace with:
+2. **Pod Creation**: The provisioner creates a dedicated Pod in the `deer-flow` namespace with:
    - The sandbox container image (all-in-one-sandbox)
    - HostPath volumes mounted for:
-     - `/mnt/skills` → Read-only access to public skills
+     - `/mnt/skills/{public,custom,legacy}` → Read-only enabled-only skill projections
      - `/mnt/user-data` → Read-write access to thread-specific data
    - Resource limits (CPU, memory, ephemeral storage)
    - Readiness/liveness probes
 
-3. **Service Creation**: A NodePort Service is created to expose the Pod, with Kubernetes auto-allocating a port from the NodePort range (typically 30000-32767).
+3. **Service Creation**: A Service is created to expose the Pod. By default this is a NodePort Service for Docker Compose compatibility. Set `SANDBOX_SERVICE_TYPE=ClusterIP` when the backend runs inside the Kubernetes cluster.
 
-4. **Access URL**: The provisioner returns `http://host.docker.internal:{NodePort}` to the backend, which the backend containers can reach directly.
+4. **Access URL**: In NodePort mode, the provisioner returns `http://{NODE_HOST}:{NodePort}`. In ClusterIP mode, it returns a Kubernetes service DNS URL like `http://sandbox-{sandbox_id}-svc.{namespace}.svc.cluster.local:8080`.
 
 5. **Cleanup**: When the session ends, `DELETE /api/sandboxes/{sandbox_id}` removes both the Pod and Service.
+
+The sandbox business endpoints are implemented as synchronous FastAPI handlers
+because the Kubernetes Python client used here is synchronous. Starlette runs
+sync handlers in its worker pool, keeping create/read/list/delete K8s API calls
+and service access polling off the ASGI event-loop thread. Keep `/health`
+lightweight; do not move the sandbox CRUD handlers back to `async def` unless
+the K8s client path is also made async or explicitly offloaded.
 
 ## Requirements
 
@@ -70,9 +77,18 @@ Create a new sandbox Pod + Service.
 ```json
 {
   "sandbox_id": "abc-123",
-  "thread_id": "thread-456"
+  "thread_id": "thread-456",
+  "user_id": "user-789"
 }
 ```
+
+`user_id` is optional for backwards compatibility and defaults to `default`. When `USERDATA_PVC_NAME` is set, the provisioner uses it to isolate PVC-backed user-data directories.
+
+When the Gateway mounts that same storage at its DeerFlow home and the PVC
+subpaths align, set `sandbox.thread_data_mounts: true` in the Gateway's
+`config.yaml` to skip redundant upload-time sandbox acquire/sync. Leave the
+field unset when using unrelated storage or when the mount relationship is
+uncertain.
 
 **Response**:
 ```json
@@ -133,13 +149,68 @@ The provisioner is configured via environment variables (set in [docker-compose-
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `K8S_NAMESPACE` | `medrix-flow` | Kubernetes namespace for sandbox resources |
-| `SANDBOX_IMAGE` | `enterprise-public-cn-beijing.cr.volces.com/vefaas-public/all-in-one-sandbox:latest` | Container image for sandbox Pods |
-| `SKILLS_HOST_PATH` | - | **Host machine** path to skills directory (must be absolute) |
+| `K8S_NAMESPACE` | `deer-flow` | Kubernetes namespace for sandbox resources |
+| `SANDBOX_IMAGE` | `enterprise-public-cn-beijing.cr.volces.com/vefaas-public/all-in-one-sandbox:latest` | AIO-compatible container image for sandbox Pods |
+| `LARK_CLI_INIT_IMAGE` | empty (feature off) | Optional lark-cli init image (Pattern A). When set, sandbox Pods requesting the lark-cli runtime get an init container + shared `emptyDir` that provisions `lark-cli`, instead of a hostPath/PVC runtime mount. See [`docker/lark-cli-init`](../lark-cli-init/README.md) |
+| `LARK_CLI_BROKER_IMAGE` | empty (feature off) | Optional lark-cli broker image (Pattern B, issue #4338). When set, sandbox Pods requesting the broker get a shim init container + a `lark-cli-broker` sidecar that holds the credentials; the plaintext `config`/`data` are mounted into the **sidecar only**, never the sandbox. Supersedes `LARK_CLI_INIT_IMAGE` when both are set. See [`docker/lark-cli-broker`](../lark-cli-broker/README.md) |
 | `THREADS_HOST_PATH` | - | **Host machine** path to threads data directory (must be absolute) |
+| `DEER_FLOW_HOST_BASE_DIR` | `/.deer-flow` | **Host machine** DeerFlow data root containing global and per-user `skills_view` projections |
+| `SKILLS_PVC_NAME` | empty (use hostPath) | PVC name for skills volume; when set, sandbox Pods use PVC instead of hostPath |
+| `SKILLS_PVC_SUBPATH_TEMPLATE` | empty | Optional `subPath` template for `SKILLS_PVC_NAME`. Supports `{user_id}` and `{thread_id}`. When empty, the skills PVC root is mounted unchanged |
+| `USERDATA_PVC_NAME` | empty (use hostPath) | PVC name for user-data volume; when set, uses PVC with `subPath: deer-flow/users/{user_id}/threads/{thread_id}/user-data` |
 | `KUBECONFIG_PATH` | `/root/.kube/config` | Path to kubeconfig **inside** the provisioner container |
-| `NODE_HOST` | `host.docker.internal` | Hostname that backend containers use to reach host NodePorts |
+| `SANDBOX_SERVICE_TYPE` | `NodePort` | Service type for sandbox access. Use `ClusterIP` when backend and provisioner run inside the same Kubernetes cluster |
+| `NODE_HOST` | `host.docker.internal` | Hostname that backend containers use to reach host NodePorts; ignored when `SANDBOX_SERVICE_TYPE=ClusterIP` |
 | `K8S_API_SERVER` | (from kubeconfig) | Override K8s API server URL (e.g., `https://host.docker.internal:26443`) |
+
+### Custom sandbox image
+
+Provisioner-created sandbox Pods use the provisioner's `SANDBOX_IMAGE` environment variable. This is separate from `sandbox.image` in `config.yaml`, which applies to local Docker or Apple Container mode.
+
+For persistent dependencies, build an image that extends the default `all-in-one-sandbox` image and set `SANDBOX_IMAGE` to your published tag. A from-scratch image must remain compatible with the AIO sandbox HTTP API consumed by `agent-sandbox`, keep `/mnt/user-data` writable, and listen on the configured sandbox port.
+
+See [Building a Custom AIO Sandbox Image](../../backend/docs/CONFIGURATION.md#building-a-custom-aio-sandbox-image) for the runtime contract and a minimal Dockerfile example.
+
+### Lark CLI sandbox runtime (Pattern A)
+
+Agents run `lark-cli` **inside** the sandbox, so the binary must exist in the
+sandbox container. Instead of the Gateway downloading Linux binaries from GitHub
+at install time and mounting them via hostPath/PVC, the provisioner can inject
+`lark-cli` with an **init container + shared `emptyDir`**:
+
+1. Publish a lark-cli init image (see [`docker/lark-cli-init`](../lark-cli-init/README.md))
+   and set `LARK_CLI_INIT_IMAGE` on the provisioner.
+2. When a sandbox is created with `provision_lark_cli_runtime: true` (the Gateway
+   sends this automatically once the managed Lark skill pack is installed), the
+   Pod gets a `lark-cli-runtime` `emptyDir`, an `lark-cli-init` init container
+   that copies the runtime into it, and a read-only runtime mount on the sandbox
+   container at `/mnt/integrations/lark-cli/runtime`. Any hostPath/PVC extra
+   mount at that path is dropped (the init container supersedes it); the per-user
+   `config`/`data` credential mounts are unchanged.
+
+`GET /api/capabilities` returns `{"lark_cli_init_image": true|false}` so the
+Gateway can surface a sandbox-runtime readiness signal in
+`/api/integrations/lark/status` — a green UI can't then hide a chat-time
+`lark-cli: command not found`.
+
+
+### PVC User-Data Upgrade Note
+
+Older provisioner versions mounted PVC user-data from `threads/{thread_id}/user-data`. The user-scoped layout mounts from `deer-flow/users/{user_id}/threads/{thread_id}/user-data`.
+
+If an existing deployment already has PVC-backed user-data under the legacy layout, migrate the DeerFlow data directory before relying on the new PVC subPath. Mount the same PVC path that the gateway uses as its DeerFlow base directory, then run the existing user-isolation migration script:
+
+```bash
+cd backend
+PYTHONPATH=. python scripts/migrate_user_isolation.py --dry-run
+PYTHONPATH=. python scripts/migrate_user_isolation.py --user-id <target-user-id>
+```
+
+This moves legacy `threads/{thread_id}/user-data` data under `users/<target-user-id>/threads/{thread_id}/user-data`, which matches the new provisioner PVC subPath when the gateway base directory is mounted at `deer-flow/` on the PVC. Use `default` as the target user only when the legacy data should remain in the default no-auth user namespace. Run the migration while no gateway or sandbox Pods are writing to those paths.
+
+In hostPath mode, the gateway materializes enabled-only views under `skills_view/public` and `users/{user_id}/skills_view/{custom,legacy}` beneath `DEER_FLOW_HOST_BASE_DIR`; the provisioner mounts those stable directories. When skills are materialized per thread on the same PVC, set `SKILLS_PVC_NAME` to that PVC and configure `SKILLS_PVC_SUBPATH_TEMPLATE=deer-flow/users/{user_id}/threads/{thread_id}/skills`. Leaving the template empty preserves the legacy behavior of mounting the skills PVC root at `/mnt/skills`. The gateway does not yet populate that PVC layout dynamically, so PVC-backed skills do not receive hostPath projection updates.
+
+**hostPath skills volumes require the gateway and the K8s node to see the same `DEER_FLOW_HOST_BASE_DIR`** (single-node deployment, or NFS/shared storage mounted at that path on every node). The gateway writes the projection there before every sandbox acquire, so as long as that path is shared, the directory the provisioner mounts always exists by the time the Pod is scheduled — even a boot-time rebuild failure for one user self-heals on their next acquire, before the provisioner is called. `skills-custom` and `skills-legacy` use hostPath type `Directory` (not `DirectoryOrCreate`): if the shared-storage assumption is violated — the gateway wrote to a different node than the one the Pod lands on — Pod creation now fails visibly instead of silently mounting an empty directory. Use `SKILLS_PVC_NAME` instead of hostPath for genuinely multi-node clusters without shared storage.
 
 ### Important: K8S_API_SERVER Override
 
@@ -174,12 +245,12 @@ kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}'
 
 3. **Kubernetes Access**:
    - The provisioner needs permissions to:
-     - Create/read/delete Pods in the `medrix-flow` namespace
-     - Create/read/delete Services in the `medrix-flow` namespace
-     - Read Namespaces (to create `medrix-flow` if missing)
+     - Create/read/delete Pods in the `deer-flow` namespace
+     - Create/read/delete Services in the `deer-flow` namespace
+     - Read Namespaces (to create `deer-flow` if missing)
 
 4. **Host Paths**:
-   - The `SKILLS_HOST_PATH` and `THREADS_HOST_PATH` must be **absolute paths on the host machine**
+   - `DEER_FLOW_HOST_BASE_DIR` and `THREADS_HOST_PATH` must be **absolute paths on the host machine**
    - These paths are mounted into sandbox Pods via K8s HostPath volumes
    - The paths must exist and be readable by the K8s node
 
@@ -192,7 +263,7 @@ The provisioner runs as part of the docker-compose-dev stack:
 make docker-start
 
 # Or start just the provisioner
-docker compose -p medrix-flow-dev -f docker/docker-compose-dev.yaml up -d provisioner
+docker compose -p deer-flow-dev -f docker/docker-compose-dev.yaml up -d provisioner
 ```
 
 The compose file:
@@ -206,24 +277,24 @@ The compose file:
 
 ```bash
 # Health check
-curl http://localhost:6204/health
+curl http://localhost:8002/health
 
 # Create a sandbox (via provisioner container for internal DNS)
-docker exec medrix-flow-provisioner curl -X POST http://localhost:6204/api/sandboxes \
+docker exec deer-flow-provisioner curl -X POST http://localhost:8002/api/sandboxes \
   -H "Content-Type: application/json" \
-  -d '{"sandbox_id":"test-001","thread_id":"thread-001"}'
+  -d '{"sandbox_id":"test-001","thread_id":"thread-001","user_id":"user-001"}'
 
 # Check sandbox status
-docker exec medrix-flow-provisioner curl http://localhost:6204/api/sandboxes/test-001
+docker exec deer-flow-provisioner curl http://localhost:8002/api/sandboxes/test-001
 
 # List all sandboxes
-docker exec medrix-flow-provisioner curl http://localhost:6204/api/sandboxes
+docker exec deer-flow-provisioner curl http://localhost:8002/api/sandboxes
 
 # Verify Pod and Service in K8s
-kubectl get pod,svc -n medrix-flow -l sandbox-id=test-001
+kubectl get pod,svc -n deer-flow -l sandbox-id=test-001
 
 # Delete sandbox
-docker exec medrix-flow-provisioner curl -X DELETE http://localhost:6204/api/sandboxes/test-001
+docker exec deer-flow-provisioner curl -X DELETE http://localhost:8002/api/sandboxes/test-001
 ```
 
 ### Verify from Backend Containers
@@ -232,10 +303,10 @@ Once a sandbox is created, the backend containers (gateway, langgraph) can acces
 
 ```bash
 # Get sandbox URL from provisioner
-SANDBOX_URL=$(docker exec medrix-flow-provisioner curl -s http://localhost:6204/api/sandboxes/test-001 | jq -r .sandbox_url)
+SANDBOX_URL=$(docker exec deer-flow-provisioner curl -s http://localhost:8002/api/sandboxes/test-001 | jq -r .sandbox_url)
 
 # Test from gateway container
-docker exec medrix-flow-gateway curl -s $SANDBOX_URL/v1/sandbox
+docker exec deer-flow-gateway curl -s $SANDBOX_URL/v1/sandbox
 ```
 
 ## Troubleshooting
@@ -257,7 +328,7 @@ docker exec medrix-flow-gateway curl -s $SANDBOX_URL/v1/sandbox
 - Ensure the compose mount source is a file (e.g., `~/.kube/config`) not a directory
 - Verify inside container:
   ```bash
-  docker exec medrix-flow-provisioner ls -ld /root/.kube/config
+  docker exec deer-flow-provisioner ls -ld /root/.kube/config
   ```
 - Expected output should indicate a regular file (`-`), not a directory (`d`)
 
@@ -281,11 +352,11 @@ docker exec medrix-flow-gateway curl -s $SANDBOX_URL/v1/sandbox
 **Cause**: HostPath volumes contain invalid paths (e.g., relative paths with `..`).
 
 **Solution**: 
-- Use absolute paths for `SKILLS_HOST_PATH` and `THREADS_HOST_PATH`
+- Use absolute paths for `DEER_FLOW_HOST_BASE_DIR` and `THREADS_HOST_PATH`
 - Verify the paths exist on your host machine:
   ```bash
   ls -la /path/to/skills
-  ls -la /path/to/backend/.medrix-flow/threads
+  ls -la /path/to/backend/.deer-flow/threads
   ```
 
 ### Issue: Pod stuck in "ContainerCreating"
@@ -294,26 +365,26 @@ docker exec medrix-flow-gateway curl -s $SANDBOX_URL/v1/sandbox
 
 **Solution**:
 - Pre-pull the image: `make docker-init`
-- Check Pod events: `kubectl describe pod sandbox-XXX -n medrix-flow`
+- Check Pod events: `kubectl describe pod sandbox-XXX -n deer-flow`
 - Check node: `kubectl get nodes`
 
 ### Issue: Cannot access sandbox URL from backend
 
-**Cause**: NodePort not reachable or `NODE_HOST` misconfigured.
+**Cause**: The backend cannot resolve or reach the sandbox ClusterIP Service DNS. This usually means the backend is not running inside the same Kubernetes cluster/network or cluster DNS/network policy is blocking access.
 
 **Solution**:
-- Verify the Service exists: `kubectl get svc -n medrix-flow`
-- Test from host: `curl http://localhost:NODE_PORT/v1/sandbox`
-- Ensure `extra_hosts` is set in docker-compose (Linux)
-- Check `NODE_HOST` env var matches how backend reaches host
+- Verify the Service exists: `kubectl get svc -n deer-flow`
+- In NodePort mode, test from the backend container: `curl http://$NODE_HOST:NODE_PORT/v1/sandbox`
+- In ClusterIP mode, test from the backend Pod: `curl http://sandbox-XXX-svc.deer-flow.svc.cluster.local:8080/v1/sandbox`
+- Check `NODE_HOST` for NodePort deployments, or cluster DNS / NetworkPolicy / service mesh rules for ClusterIP deployments
 
 ## Security Considerations
 
-1. **HostPath Volumes**: The provisioner mounts host directories into sandbox Pods. Ensure these paths contain only trusted data.
+1. **HostPath Volumes**: The provisioner mounts host directories into sandbox Pods by default. Ensure these paths contain only trusted data. For production, prefer PVC-based volumes (set `SKILLS_PVC_NAME` and `USERDATA_PVC_NAME`) to avoid node-specific data loss risks.
 
 2. **Resource Limits**: Each sandbox Pod has CPU, memory, and storage limits to prevent resource exhaustion.
 
-3. **Network Isolation**: Sandbox Pods run in the `medrix-flow` namespace but share the host's network namespace via NodePort. Consider NetworkPolicies for stricter isolation.
+3. **Network Isolation**: Sandbox Pods run in the configured namespace and are exposed through NodePort or ClusterIP Services. Prefer ClusterIP with NetworkPolicies for in-cluster deployments.
 
 4. **kubeconfig Access**: The provisioner has full access to your Kubernetes cluster via the mounted kubeconfig. Run it only in trusted environments.
 
@@ -322,7 +393,7 @@ docker exec medrix-flow-gateway curl -s $SANDBOX_URL/v1/sandbox
 ## Future Enhancements
 
 - [ ] Support for custom resource requests/limits per sandbox
-- [ ] PersistentVolume support for larger data requirements
+- [x] PersistentVolume support for larger data requirements
 - [ ] Automatic cleanup of stale sandboxes (timeout-based)
 - [ ] Metrics and monitoring (Prometheus integration)
 - [ ] Multi-cluster support (route to different K8s clusters)

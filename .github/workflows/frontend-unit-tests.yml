@@ -2,15 +2,9 @@ name: Frontend Unit Tests
 
 on:
   push:
-    branches: [ "main" ]
-    paths:
-      - "frontend/**"
-      - ".github/workflows/frontend-unit-tests.yml"
+    branches: [ 'main', '2.0.x-dev' ]
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
-    paths:
-      - "frontend/**"
-      - ".github/workflows/frontend-unit-tests.yml"
 
 concurrency:
   group: frontend-unit-tests-${{ github.event.pull_request.number || github.ref }}
@@ -21,7 +15,7 @@ permissions:
 
 jobs:
   frontend-unit-tests:
-    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
+    if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -32,7 +26,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: '22'
 
       - name: Enable Corepack
         run: corepack enable
@@ -44,6 +38,6 @@ jobs:
         working-directory: frontend
         run: pnpm install --frozen-lockfile
 
-      - name: Run frontend unit tests
+      - name: Run unit tests of frontend
         working-directory: frontend
-        run: pnpm test:unit
+        run: make test

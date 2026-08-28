@@ -1,0 +1,362 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "deer-flow.fullname" . }}-nginx
+  namespace: {{ include "deer-flow.namespace" . }}
+  labels:
+    {{- include "deer-flow.labels" . | nindent 4 }}
+data:
+  nginx.conf: |
+    events {
+        worker_connections 1024;
+    }
+    pid /tmp/nginx.pid;
+    http {
+        sendfile on;
+        tcp_nopush on;
+        tcp_nodelay on;
+        keepalive_timeout 65;
+        types_hash_max_size 2048;
+
+        access_log /dev/stdout;
+        error_log /dev/stderr;
+
+        # Preserve the client scheme when nginx is behind an Ingress/TLS
+        # terminator. This keeps Gateway origin checks and session cookies in
+        # sync with the externally visible URL.
+        map $http_x_forwarded_proto $forwarded_proto {
+            default    $scheme;
+            "~*^https" https;
+        }
+
+        # Only send an upgrade header when the browser requested one. Ordinary
+        # Next.js streams must remain normal HTTP responses.
+        map $http_upgrade $connection_upgrade {
+            default upgrade;
+            ''      '';
+        }
+
+        # K8s Services resolve at config-parse time. Static upstream groups are
+        # therefore preferable here to Docker's request-time DNS variables.
+        upstream gateway_upstream {
+            server gateway:8001;
+            keepalive 32;
+        }
+        upstream frontend_upstream {
+            server frontend:3000;
+            keepalive 32;
+        }
+        {{- if .Values.provisioner.enabled }}
+        upstream provisioner_upstream {
+            server provisioner:8002;
+            keepalive 16;
+        }
+        {{- end }}
+
+        server {
+            listen 2026 default_server;
+            listen [::]:2026 default_server;
+            server_name _;
+
+            proxy_buffering off;
+            proxy_cache off;
+
+            # The UI-password gate is a separate layer from Gateway JWT auth.
+            # The internal subrequest is the only path allowed to call the
+            # Next.js auth guard; the guard rejects direct browser requests.
+            location = /_auth_check {
+                internal;
+                proxy_pass http://frontend_upstream/api/internal/auth-guard;
+                proxy_http_version 1.1;
+                proxy_pass_request_body off;
+                proxy_set_header Content-Length "";
+                proxy_set_header Cookie $http_cookie;
+                proxy_set_header Host $http_host;
+                proxy_set_header X-Medrix-Admin-Token $http_x_medrix_admin_token;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto $forwarded_proto;
+                proxy_set_header X-Original-URI $request_uri;
+            }
+
+            # Next.js-owned auth/session endpoints must not fall through to the
+            # Gateway /api/ catch-all.
+            location ^~ /api/auth/ {
+                proxy_pass http://frontend_upstream;
+                proxy_http_version 1.1;
+                proxy_set_header Host $http_host;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto $forwarded_proto;
+            }
+
+            location ^~ /api/session/ {
+                proxy_pass http://frontend_upstream;
+                proxy_http_version 1.1;
+                proxy_set_header Host $http_host;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto $forwarded_proto;
+            }
+
+            # Gateway account bootstrap/login APIs still pass the optional
+            # outer gate. Set MEDRIX_FLOW_UI_PASSWORD to use this in production;
+            # with NODE_ENV=production and no password, the frontend guard
+            # deliberately returns 403 (fail-closed).
+            location ^~ /api/v1/auth/ {
+                auth_request /_auth_check;
+                auth_request_set $medrix_proxy_auth $upstream_http_x_medrix_proxy_authorized;
+                proxy_pass http://gateway_upstream;
+                proxy_http_version 1.1;
+                proxy_set_header Host $http_host;
+                proxy_set_header X-Medrix-Admin-Token "";
+                proxy_set_header X-Medrix-Proxy-Authorized "";
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto $forwarded_proto;
+                proxy_pass_header Set-Cookie;
+            }
+
+            # LangGraph-compatible API routes are served by the embedded
+            # Gateway runtime. Rewrite the public prefix to /api/.
+            location /api/langgraph/ {
+                auth_request /_auth_check;
+                auth_request_set $medrix_proxy_auth $upstream_http_x_medrix_proxy_authorized;
+                rewrite ^/api/langgraph/(.*) /api/$1 break;
+                proxy_pass http://gateway_upstream;
+                proxy_http_version 1.1;
+                proxy_set_header Host $http_host;
+                proxy_set_header X-Medrix-Admin-Token "";
+                proxy_set_header X-Medrix-Proxy-Authorized $medrix_proxy_auth;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto $forwarded_proto;
+                proxy_set_header Connection '';
+                proxy_set_header X-Accel-Buffering no;
+                client_max_body_size 20M;
+                proxy_request_buffering off;
+                proxy_connect_timeout 600s;
+                proxy_send_timeout 600s;
+                proxy_read_timeout 600s;
+                chunked_transfer_encoding on;
+            }
+
+            # Named Gateway API endpoints.
+            location /api/models {
+                auth_request /_auth_check;
+                auth_request_set $medrix_proxy_auth $upstream_http_x_medrix_proxy_authorized;
+                proxy_pass http://gateway_upstream;
+                proxy_http_version 1.1;
+                proxy_set_header Host $http_host;
+                proxy_set_header X-Medrix-Admin-Token "";
+                proxy_set_header X-Medrix-Proxy-Authorized $medrix_proxy_auth;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto $forwarded_proto;
+            }
+
+            location /api/memory {
+                auth_request /_auth_check;
+                auth_request_set $medrix_proxy_auth $upstream_http_x_medrix_proxy_authorized;
+                proxy_pass http://gateway_upstream;
+                proxy_http_version 1.1;
+                proxy_set_header Host $http_host;
+                proxy_set_header X-Medrix-Admin-Token "";
+                proxy_set_header X-Medrix-Proxy-Authorized $medrix_proxy_auth;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto $forwarded_proto;
+            }
+
+            location /api/mcp {
+                auth_request /_auth_check;
+                auth_request_set $medrix_proxy_auth $upstream_http_x_medrix_proxy_authorized;
+                proxy_pass http://gateway_upstream;
+                proxy_http_version 1.1;
+                proxy_set_header Host $http_host;
+                proxy_set_header X-Medrix-Admin-Token "";
+                proxy_set_header X-Medrix-Proxy-Authorized $medrix_proxy_auth;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto $forwarded_proto;
+            }
+
+            location /api/skills {
+                auth_request /_auth_check;
+                auth_request_set $medrix_proxy_auth $upstream_http_x_medrix_proxy_authorized;
+                proxy_pass http://gateway_upstream;
+                proxy_http_version 1.1;
+                proxy_set_header Host $http_host;
+                proxy_set_header X-Medrix-Admin-Token "";
+                proxy_set_header X-Medrix-Proxy-Authorized $medrix_proxy_auth;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto $forwarded_proto;
+            }
+
+            location /api/agents {
+                auth_request /_auth_check;
+                auth_request_set $medrix_proxy_auth $upstream_http_x_medrix_proxy_authorized;
+                proxy_pass http://gateway_upstream;
+                proxy_http_version 1.1;
+                proxy_set_header Host $http_host;
+                proxy_set_header X-Medrix-Admin-Token "";
+                proxy_set_header X-Medrix-Proxy-Authorized $medrix_proxy_auth;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto $forwarded_proto;
+            }
+
+            # Large uploads and long-lived browser/run streams need their own
+            # body, buffering, and upgrade settings.
+            location ~ ^/api/threads/[^/]+/uploads {
+                auth_request /_auth_check;
+                auth_request_set $medrix_proxy_auth $upstream_http_x_medrix_proxy_authorized;
+                proxy_pass http://gateway_upstream;
+                proxy_http_version 1.1;
+                proxy_set_header Host $http_host;
+                proxy_set_header X-Medrix-Admin-Token "";
+                proxy_set_header X-Medrix-Proxy-Authorized $medrix_proxy_auth;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto $forwarded_proto;
+                client_max_body_size 100M;
+                proxy_request_buffering off;
+            }
+
+            location ~ ^/api/threads/[^/]+/browser/stream {
+                auth_request /_auth_check;
+                auth_request_set $medrix_proxy_auth $upstream_http_x_medrix_proxy_authorized;
+                proxy_pass http://gateway_upstream;
+                proxy_http_version 1.1;
+                proxy_set_header Host $http_host;
+                proxy_set_header X-Medrix-Admin-Token "";
+                proxy_set_header X-Medrix-Proxy-Authorized $medrix_proxy_auth;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto $forwarded_proto;
+                proxy_set_header Upgrade $http_upgrade;
+                proxy_set_header Connection 'upgrade';
+                proxy_cache_bypass $http_upgrade;
+                proxy_connect_timeout 600s;
+                proxy_send_timeout 600s;
+                proxy_read_timeout 600s;
+            }
+
+            location ~ ^/api/threads {
+                auth_request /_auth_check;
+                auth_request_set $medrix_proxy_auth $upstream_http_x_medrix_proxy_authorized;
+                proxy_pass http://gateway_upstream;
+                proxy_http_version 1.1;
+                proxy_set_header Host $http_host;
+                proxy_set_header X-Medrix-Admin-Token "";
+                proxy_set_header X-Medrix-Proxy-Authorized $medrix_proxy_auth;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto $forwarded_proto;
+            }
+
+            location /docs {
+                auth_request /_auth_check;
+                auth_request_set $medrix_proxy_auth $upstream_http_x_medrix_proxy_authorized;
+                proxy_pass http://gateway_upstream;
+                proxy_http_version 1.1;
+                proxy_set_header Host $http_host;
+                proxy_set_header X-Medrix-Admin-Token "";
+                proxy_set_header X-Medrix-Proxy-Authorized $medrix_proxy_auth;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto $forwarded_proto;
+            }
+
+            location /redoc {
+                auth_request /_auth_check;
+                auth_request_set $medrix_proxy_auth $upstream_http_x_medrix_proxy_authorized;
+                proxy_pass http://gateway_upstream;
+                proxy_http_version 1.1;
+                proxy_set_header Host $http_host;
+                proxy_set_header X-Medrix-Admin-Token "";
+                proxy_set_header X-Medrix-Proxy-Authorized $medrix_proxy_auth;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto $forwarded_proto;
+            }
+
+            location /openapi.json {
+                auth_request /_auth_check;
+                auth_request_set $medrix_proxy_auth $upstream_http_x_medrix_proxy_authorized;
+                proxy_pass http://gateway_upstream;
+                proxy_http_version 1.1;
+                proxy_set_header Host $http_host;
+                proxy_set_header X-Medrix-Admin-Token "";
+                proxy_set_header X-Medrix-Proxy-Authorized $medrix_proxy_auth;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto $forwarded_proto;
+            }
+
+            # Health is intentionally public so Kubernetes probes do not need
+            # an application/session cookie. /nginx-health is nginx-local.
+            location /health {
+                proxy_pass http://gateway_upstream;
+                proxy_http_version 1.1;
+                proxy_set_header Host $http_host;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto $forwarded_proto;
+            }
+
+            location = /nginx-health {
+                access_log off;
+                default_type text/plain;
+                return 200 "ok";
+            }
+
+            {{- if .Values.provisioner.enabled }}
+            location /api/sandboxes {
+                auth_request /_auth_check;
+                auth_request_set $medrix_proxy_auth $upstream_http_x_medrix_proxy_authorized;
+                proxy_pass http://provisioner_upstream;
+                proxy_http_version 1.1;
+                proxy_set_header Host $http_host;
+                proxy_set_header X-Medrix-Admin-Token "";
+                proxy_set_header X-Medrix-Proxy-Authorized $medrix_proxy_auth;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto $forwarded_proto;
+            }
+            {{- end }}
+
+            # Any Gateway route not called out above remains protected.
+            location /api/ {
+                auth_request /_auth_check;
+                auth_request_set $medrix_proxy_auth $upstream_http_x_medrix_proxy_authorized;
+                proxy_pass http://gateway_upstream;
+                proxy_http_version 1.1;
+                proxy_set_header Host $http_host;
+                proxy_set_header X-Medrix-Admin-Token "";
+                proxy_set_header X-Medrix-Proxy-Authorized $medrix_proxy_auth;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto $forwarded_proto;
+                proxy_pass_header Set-Cookie;
+            }
+
+            # Everything else is the Next.js application. Middleware protects
+            # /setup and /workspace while leaving the public landing page open.
+            location / {
+                proxy_pass http://frontend_upstream;
+                proxy_http_version 1.1;
+                proxy_set_header Host $http_host;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto $forwarded_proto;
+                proxy_set_header Upgrade $http_upgrade;
+                proxy_set_header Connection $connection_upgrade;
+                proxy_cache_bypass $http_upgrade;
+                proxy_connect_timeout 600s;
+                proxy_send_timeout 600s;
+                proxy_read_timeout 600s;
+            }
+        }
+    }

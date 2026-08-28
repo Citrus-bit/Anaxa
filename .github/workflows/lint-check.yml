@@ -1,11 +1,8 @@
 name: Lint Check
 
-# Frontend build stays in this workflow because env validation and route changes
-# routinely surface issues that lint/typecheck alone will miss.
-
 on:
   push:
-    branches: [ 'main' ]
+    branches: [ 'main', '2.0.x-dev' ]
   pull_request:
     branches: [ '*' ]
 
@@ -13,20 +10,53 @@ permissions:
   contents: read
 
 jobs:
-  lint:
+  agent-guidance:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.12'
 
-      - name: Install the latest version of uv
+      - name: Check agent guidance on pull requests
+        if: github.event_name == 'pull_request'
+        run: >-
+          python scripts/check_agent_guidance.py
+          --base-ref "${{ github.event.pull_request.base.sha }}"
+          --head-ref "${{ github.event.pull_request.head.sha }}"
+          --github-annotations
+
+      - name: Check agent guidance on pushes
+        if: github.event_name == 'push'
+        run: >-
+          python scripts/check_agent_guidance.py
+          --before "${{ github.event.before }}"
+          --after "${{ github.sha }}"
+          --github-annotations
+
+  lint-backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Install uv
         uses: astral-sh/setup-uv@v7
         with:
-          version: "latest"
+          # Must match backend/Dockerfile's UV_IMAGE tag; pinned by backend/tests/test_ci_uv_version_pin.py
+          version: "0.11.1"
+
+      - name: Check uv.lock is in sync
+        working-directory: backend
+        run: uv lock --check
 
       - name: Install dependencies
         working-directory: backend
@@ -40,7 +70,7 @@ jobs:
   lint-frontend:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -57,6 +87,11 @@ jobs:
         run: |
           cd frontend
           pnpm install --frozen-lockfile
+
+      - name: Check frontend formatting
+        run: |
+          cd frontend
+          pnpm format
 
       - name: Run frontend linting
         run: |

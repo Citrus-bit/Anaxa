@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Cross-platform config bootstrap script for Anaxa."""
+"""Cross-platform config bootstrap script for DeerFlow."""
 
 from __future__ import annotations
 
@@ -39,10 +39,6 @@ def main() -> int:
         copy_if_missing(
             project_root / "frontend" / ".env.example",
             project_root / "frontend" / ".env",
-        )
-        copy_if_missing(
-            project_root / "extensions_config.example.json",
-            project_root / "extensions_config.json",
         )
     except (FileNotFoundError, OSError) as exc:
         print("Error while generating configuration files:")

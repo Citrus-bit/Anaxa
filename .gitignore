@@ -1,5 +1,7 @@
-# MedrixFlow docker image cache
+# DeerFlow docker image cache
 docker/.cache/
+# oh-my-claudecode state
+.omc/
 # OS generated files
 .DS_Store
 *.local
@@ -18,6 +20,12 @@ __pycache__/
 .venv
 venv/
 
+# Benchmark outputs
+bench_results.jsonl
+bench_optimized.jsonl
+results.jsonl
+backend/scripts/benchmark/*.jsonl
+
 # Environment variables
 .env
 
@@ -33,13 +41,17 @@ extensions_config.json
 # Coverage report
 coverage.xml
 coverage/
-.medrix-flow/
-.claude/
+.deer-flow/
+# Local Codex/Obsidian workspaces and review scratch are machine state, not
+# application sources. Keep the DeerFlow checkout safe to publish even when
+# these tools are active in the same directory.
 .codex/
-.omc/
+.obsidian/
+.claude/
 skills/custom/*
 logs/
 log/
+debug.log
 
 # Local git hooks (keep only on this machine, do not push)
 .githooks/
@@ -53,22 +65,23 @@ web/
 
 # Deployment artifacts
 backend/Dockerfile.langgraph
-backend/.langgraph_api/
-backend/.medrix-flow/
 config.yaml.bak
-.obsidian/
-# Added by code-review-graph
-.code-review-graph/
+.playwright-mcp
+/frontend/test-results/
+/frontend/playwright-report/
+.gstack/
+.worktrees
 
-# Local security audit notes and completion reports
-finish.md
-finish2.md
-security-audit-plan.md
-
-# Local planning / audit scratch files
+# Local planning and connector metadata
 .mcp.json
 task_plan.md
 findings.md
 progress.md
 deerflow_last_commit_files.txt
 docs/debug-log.md
+security-audit-plan.md
+finish.md
+finish2.md
+
+# Monocle agent-observability trace output (local file exporter)
+.monocle/

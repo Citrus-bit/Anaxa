@@ -12,8 +12,8 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 EXAMPLE="$REPO_ROOT/config.example.yaml"
 
 # Resolve config.yaml location: env var > backend/ > repo root
-if [ -n "$MEDRIX_FLOW_CONFIG_PATH" ] && [ -f "$MEDRIX_FLOW_CONFIG_PATH" ]; then
-    CONFIG="$MEDRIX_FLOW_CONFIG_PATH"
+if [ -n "$DEER_FLOW_CONFIG_PATH" ] && [ -f "$DEER_FLOW_CONFIG_PATH" ]; then
+    CONFIG="$DEER_FLOW_CONFIG_PATH"
 elif [ -f "$REPO_ROOT/backend/config.yaml" ]; then
     CONFIG="$REPO_ROOT/backend/config.yaml"
 elif [ -f "$REPO_ROOT/config.yaml" ]; then
@@ -30,26 +30,28 @@ fi
 if [ -z "$CONFIG" ]; then
     echo "No config.yaml found — creating from example..."
     cp "$EXAMPLE" "$REPO_ROOT/config.yaml"
-    echo "✓ config.yaml created. Please review and set your API keys."
-    exit 0
-fi
-
-# Fast path: skip Python when config_version already matches
-USER_VERSION=$(grep -m1 '^config_version:' "$CONFIG" 2>/dev/null | awk '{print $2}')
-EXAMPLE_VERSION=$(grep -m1 '^config_version:' "$EXAMPLE" 2>/dev/null | awk '{print $2}')
-if [ -n "$USER_VERSION" ] && [ -n "$EXAMPLE_VERSION" ] && [ "$USER_VERSION" = "$EXAMPLE_VERSION" ]; then
+    echo "OK config.yaml created. Please review and set your API keys."
     exit 0
 fi
 
 # Use inline Python to do migrations + recursive merge with PyYAML
-cd "$REPO_ROOT/backend" && uv run python3 -c "
+if command -v cygpath >/dev/null 2>&1; then
+    CONFIG_WIN="$(cygpath -w "$CONFIG")"
+    EXAMPLE_WIN="$(cygpath -w "$EXAMPLE")"
+else
+    CONFIG_WIN="$CONFIG"
+    EXAMPLE_WIN="$EXAMPLE"
+fi
+
+cd "$REPO_ROOT/backend" && CONFIG_WIN_PATH="$CONFIG_WIN" EXAMPLE_WIN_PATH="$EXAMPLE_WIN" uv run python -c "
+import os
 import sys, shutil, copy, re
 from pathlib import Path
 
 import yaml
 
-config_path = Path('$CONFIG')
-example_path = Path('$EXAMPLE')
+config_path = Path(os.environ['CONFIG_WIN_PATH'])
+example_path = Path(os.environ['EXAMPLE_WIN_PATH'])
 
 with open(config_path, encoding='utf-8') as f:
     raw_text = f.read()
@@ -62,10 +64,10 @@ user_version = user.get('config_version', 0)
 example_version = example.get('config_version', 0)
 
 if user_version >= example_version:
-    print(f'✓ config.yaml is already up to date (version {user_version}).')
+    print(f'OK config.yaml is already up to date (version {user_version}).')
     sys.exit(0)
 
-print(f'Upgrading config.yaml: version {user_version} → {example_version}')
+print(f'Upgrading config.yaml: version {user_version} -> {example_version}')
 print()
 
 # ── Migrations ───────────────────────────────────────────────────────────
@@ -75,12 +77,12 @@ print()
 
 MIGRATIONS = {
     1: {
-        'description': 'Rename src.* module paths to medrix_flow.*',
+        'description': 'Rename src.* module paths to deerflow.*',
         'replacements': [
-            ('src.community.', 'medrix_flow.community.'),
-            ('src.sandbox.', 'medrix_flow.sandbox.'),
-            ('src.models.', 'medrix_flow.models.'),
-            ('src.tools.', 'medrix_flow.tools.'),
+            ('src.community.', 'deerflow.community.'),
+            ('src.sandbox.', 'deerflow.sandbox.'),
+            ('src.models.', 'deerflow.models.'),
+            ('src.tools.', 'deerflow.tools.'),
         ],
     },
     # Future migrations go here:
@@ -100,7 +102,7 @@ for version in range(user_version + 1, example_version + 1):
     for old, new in migration.get('replacements', []):
         if old in raw_text:
             raw_text = raw_text.replace(old, new)
-            migrated.append(f'{old} → {new}')
+            migrated.append(f'{old} -> {new}')
 
 # Re-parse after text migrations
 user = yaml.safe_load(raw_text) or {}
@@ -148,6 +150,6 @@ if not migrated and not added:
     print('No changes needed (version bumped only).')
 
 print()
-print(f'✓ config.yaml upgraded to version {example_version}.')
+print(f'OK config.yaml upgraded to version {example_version}.')
 print('  Please review the changes and set any new required values.')
 "
