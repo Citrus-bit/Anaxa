@@ -91,7 +91,7 @@ async def upsert_feedback(
 
 
 @router.delete("/{thread_id}/runs/{run_id}/feedback")
-@require_permission("threads", "delete", owner_check=True, require_existing=True)
+@require_permission("threads", "write", owner_check=True, require_existing=True)
 async def delete_run_feedback(
     thread_id: ThreadId,
     run_id: str,
@@ -168,7 +168,7 @@ async def feedback_stats(
 
 
 @router.delete("/{thread_id}/runs/{run_id}/feedback/{feedback_id}")
-@require_permission("threads", "delete", owner_check=True, require_existing=True)
+@require_permission("threads", "write", owner_check=True, require_existing=True)
 async def delete_feedback(
     thread_id: ThreadId,
     run_id: str,
