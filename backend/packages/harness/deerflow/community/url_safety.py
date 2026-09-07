@@ -27,8 +27,10 @@ def resolve_host_addresses(hostname: str) -> list[ipaddress._BaseAddress]:
 
 
 def is_blocked_address(address: ipaddress._BaseAddress) -> bool:
-    """Return True for addresses web tools should not reach by default."""
-    return address.is_private or address.is_loopback or address.is_link_local or address.is_reserved or address.is_multicast or address.is_unspecified
+    """Return True unless an address is globally routable unicast."""
+    # ``is_global`` also excludes shared address space such as 100.64.0.0/10,
+    # which is neither private nor reserved according to ``ipaddress``.
+    return not address.is_global or address.is_multicast
 
 
 def validate_public_http_url(

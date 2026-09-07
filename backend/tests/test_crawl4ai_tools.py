@@ -227,6 +227,16 @@ class TestCrawl4AiTools:
         mock_build.assert_not_called()
 
     @patch("deerflow.community.crawl4ai.tools._build_client")
+    async def test_web_fetch_tool_rejects_shared_address_space(self, mock_build):
+        from deerflow.community.crawl4ai import tools
+
+        with patch("deerflow.community.crawl4ai.tools._get_tool_config", return_value=None):
+            result = await tools.web_fetch_tool.ainvoke("http://100.64.0.1/internal")
+
+        assert "private, loopback, or metadata" in result
+        mock_build.assert_not_called()
+
+    @patch("deerflow.community.crawl4ai.tools._build_client")
     async def test_web_fetch_tool_rejects_dns_resolving_to_private(self, mock_build):
         from deerflow.community.crawl4ai import tools
 

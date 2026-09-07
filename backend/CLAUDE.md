@@ -271,6 +271,7 @@ Proxied through nginx: `/api/langgraph/*` → LangGraph, all other `/api/*` → 
 - `jina_ai/` - Web fetch via Jina reader API with readability extraction
 - `firecrawl/` - Web scraping via Firecrawl API
 - `image_search/` - Image search via DuckDuckGo
+- Server-side fetch and browser tools reject every non-global or multicast destination by default, including carrier-grade NAT address space; private-network access requires the explicit tool opt-in.
 
 ### Research Pipeline (`packages/harness/medrix_flow/research/`)
 
