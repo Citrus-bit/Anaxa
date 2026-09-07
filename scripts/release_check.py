@@ -8,9 +8,7 @@ logs, caches, and uploaded/generated artifacts must never be tracked or staged.
 from __future__ import annotations
 
 import subprocess
-import sys
 from pathlib import PurePosixPath
-
 
 SENSITIVE_EXACT = {
     ".env",
@@ -114,7 +112,7 @@ def normalize_status_path(line: str) -> str | None:
 
 
 def is_sensitive(path_text: str) -> bool:
-    path_text = path_text.strip().lstrip("./")
+    path_text = path_text.strip().removeprefix("./")
     if not path_text or path_text in ALLOWLIST_EXACT:
         return False
     if path_text in SENSITIVE_EXACT:
@@ -146,11 +144,7 @@ def main() -> int:
     tracked = run_git(["ls-files"])
     tracked_hits = sorted(path for path in tracked if is_sensitive(path))
 
-    status_paths = [
-        path
-        for line in run_git(["status", "--short", "--untracked-files=all"])
-        if (path := normalize_status_path(line))
-    ]
+    status_paths = [path for line in run_git(["status", "--short", "--untracked-files=all"]) if (path := normalize_status_path(line))]
     status_hits = sorted(path for path in status_paths if is_sensitive(path))
 
     failed = False

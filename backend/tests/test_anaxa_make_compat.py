@@ -27,7 +27,17 @@ def test_release_check_covers_current_and_legacy_runtime_directories() -> None:
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
 
-    assert module.is_sensitive(".deer-flow/memory.json")
-    assert module.is_sensitive("backend/.deer-flow/data/deerflow.db")
-    assert module.is_sensitive(".medrix-flow/memory.json")
-    assert module.is_sensitive("backend/.medrix-flow/data/medrix.db")
+    sensitive_paths = (
+        ".env",
+        "./.env",
+        ".mcp.json",
+        ".codex/session.json",
+        ".deer-flow/memory.json",
+        "backend/.deer-flow/data/deerflow.db",
+        ".medrix-flow/memory.json",
+        "backend/.medrix-flow/data/medrix.db",
+    )
+    for path in sensitive_paths:
+        assert module.is_sensitive(path), path
+
+    assert not module.is_sensitive(".env.example")
