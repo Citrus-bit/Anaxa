@@ -387,6 +387,7 @@ def test_upload_sandbox_sync_proceeds_when_allowed(monkeypatch, tmp_path):
     sandbox_provider.uses_thread_data_mounts = False
     sandbox_provider.acquire_async = AsyncMock(return_value="sbx-1")
     sandbox_provider.get = MagicMock(return_value=MagicMock())
+    sandbox_provider.release = MagicMock()
     monkeypatch.setattr("app.gateway.routers.uploads.get_sandbox_provider", lambda: sandbox_provider)
     monkeypatch.setattr(
         "app.gateway.deps.get_optional_user_from_request",
@@ -396,6 +397,34 @@ def test_upload_sandbox_sync_proceeds_when_allowed(monkeypatch, tmp_path):
     resp = client.post("/api/threads/upload-test/uploads", files={"files": ("a.txt", b"hello")})
     assert resp.status_code == 200, resp.text
     sandbox_provider.acquire_async.assert_called_once()
+    sandbox_provider.release.assert_called_once_with("sbx-1")
+
+
+def test_upload_releases_sandbox_when_sync_fails(monkeypatch, tmp_path):
+    """An acquired sandbox is released even when its upload sync raises."""
+    from unittest.mock import AsyncMock, MagicMock
+
+    provider = RbacAuthorizationProvider(roles={"user": {"sandbox": {"allow": "*"}}})
+    client = _make_upload_app(monkeypatch, provider)
+    _isolated_uploads_dir(monkeypatch, tmp_path)
+
+    sandbox = MagicMock()
+    sandbox.update_file.side_effect = RuntimeError("sync failed")
+    sandbox_provider = MagicMock()
+    sandbox_provider.uses_thread_data_mounts = False
+    sandbox_provider.acquire_async = AsyncMock(return_value="sbx-1")
+    sandbox_provider.get = MagicMock(return_value=sandbox)
+    sandbox_provider.release = MagicMock()
+    monkeypatch.setattr("app.gateway.routers.uploads.get_sandbox_provider", lambda: sandbox_provider)
+    monkeypatch.setattr(
+        "app.gateway.deps.get_optional_user_from_request",
+        AsyncMock(return_value=_request_user()),
+    )
+
+    with pytest.raises(RuntimeError, match="sync failed"):
+        client.post("/api/threads/upload-test/uploads", files={"files": ("a.txt", b"hello")})
+
+    sandbox_provider.release.assert_called_once_with("sbx-1")
 
 
 def _isolated_uploads_dir(monkeypatch, tmp_path):
