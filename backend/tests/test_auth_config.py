@@ -1,11 +1,20 @@
 """Tests for AuthConfig typed configuration."""
 
 import os
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 
 import app.gateway.auth.config as cfg
+
+
+def _load_secret_in_worker(base_dir: str, start_event, results) -> None:
+    from deerflow.config.paths import Paths
+
+    with patch("deerflow.config.paths.get_paths", return_value=Paths(base_dir=Path(base_dir))):
+        start_event.wait()
+        results.put(cfg._load_or_create_secret())
 
 
 def test_auth_config_defaults():
@@ -88,3 +97,36 @@ def test_auth_config_empty_secret_file_generates_new(tmp_path):
             assert (tmp_path / ".jwt_secret").read_text().strip() == config.jwt_secret
     finally:
         cfg._auth_config = old
+
+
+def test_auth_config_concurrent_initialization_reuses_one_secret(tmp_path):
+    import multiprocessing
+
+    context = multiprocessing.get_context("spawn")
+    start_event = context.Event()
+    results = context.Queue()
+    processes = [
+        context.Process(
+            target=_load_secret_in_worker,
+            args=(str(tmp_path), start_event, results),
+        )
+        for _ in range(2)
+    ]
+
+    try:
+        for process in processes:
+            process.start()
+        start_event.set()
+        for process in processes:
+            process.join(timeout=10)
+
+        assert [process.exitcode for process in processes] == [0, 0]
+        worker_secrets = [results.get(timeout=2) for _ in processes]
+        persisted_secret = (tmp_path / ".jwt_secret").read_text(encoding="utf-8").strip()
+        assert worker_secrets == [persisted_secret, persisted_secret]
+    finally:
+        for process in processes:
+            if process.is_alive():
+                process.terminate()
+            process.join(timeout=2)
+        results.close()
